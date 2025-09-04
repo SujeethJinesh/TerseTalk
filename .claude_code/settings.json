@@ -1,0 +1,22 @@
+{
+  "allowedTools": [
+    "Write",
+    "Read",
+    "Edit",
+    "View",
+    "LS",
+    "Bash(*)",
+    "BashInteractive(*)",
+    "Search",
+    "Replace",
+    "Tree",
+    "MCP(*)",
+    "Bash(curl:*)",
+    "Bash(wget:*)",
+    "Bash(git:*)",
+    "Bash(npm:*)",
+    "Bash(pip:*)"
+  ],
+  "model": "opus",
+  "maxTurns": 10
+}
