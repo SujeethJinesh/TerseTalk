@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Tuple
+from tersetalk.summarization import Summarizer
 
 # --- Protocol Tags (single letters) -----------------------------
 
@@ -67,6 +68,7 @@ class JSONLValidator:
 
   caps: Dict[str, int] = field(default_factory=dict)
   memory: Optional[SupportsPut] = None
+  summarizer: Optional[Summarizer] = None
 
   def __post_init__(self) -> None:
     default_caps = {"f": 30, "p": 20, "q": 30, "g": 30, "u": 20, "t": 50}
@@ -76,6 +78,8 @@ class JSONLValidator:
     # Do not rely on truthiness; MemoryStore defines __len__ and may be empty.
     if self.memory is None:
       self.memory = _LocalMemory()
+    # Default summarizer: extractive
+    self.summarizer = self.summarizer or Summarizer(method="extractive")
     self.overflow_freq: Dict[str, int] = {}
 
   # ---------- Detection ----------
@@ -184,16 +188,10 @@ class JSONLValidator:
         prose.append(f"Meta: {key}={val}")
     return "\n".join(prose)
 
-  # ---------- Internal: summarization stub ----------
-  def _summarize(self, text: str, target_tokens: int) -> str:
-    """
-    PR-02 stub: simple word-capped summary with ellipsis.
-    PR-04 will provide a proper summarization module.
-    """
-    words = text.strip().split()
-    if len(words) <= target_tokens:
-      return text
-    return " ".join(words[:target_tokens]) + "..."
+  # ---------- Internal: summarization shim ----------
+  def _summarize(self, text: str, target_tokens: int) -> str:  # pragma: no cover
+    # Back-compat: route to summarizer (tag unknown → treat as free text)
+    return self.summarizer.summarize(text, "t", target_tokens)
 
   # ---------- Core: validation + overflow ----------
   def validate_and_overflow(self, jsonl: str) -> Tuple[str, Dict[str, Any]]:
@@ -222,11 +220,12 @@ class JSONLValidator:
         role = arr[1] if len(arr) > 1 else "W"
         text = arr[2] if len(arr) > 2 else ""
         if isinstance(text, str) and cap is not None and _token_estimate(text) > cap:
-          summary = self._summarize(text, cap)
+          summary = self.summarizer.summarize(text, tag, cap)
+          method = getattr(self.summarizer, "method", "extractive")
           mid = self.memory.put(text)  # type: ignore[union-attr]
           self.overflow_freq[tag] = self.overflow_freq.get(tag, 0) + 1
           out_lines.append(json.dumps(["q", role, summary]))
-          out_lines.append(json.dumps(["o", summary, mid, "extractive"]))
+          out_lines.append(json.dumps(["o", summary, mid, method]))
         else:
           out_lines.append(json.dumps(["q", role, text]))
         continue
@@ -234,13 +233,14 @@ class JSONLValidator:
       if tag in ("f", "p", "g", "u", "t"):
         text = arr[1] if len(arr) > 1 else ""
         if isinstance(text, str) and cap is not None and _token_estimate(text) > cap:
-          summary = self._summarize(text, cap)
+          summary = self.summarizer.summarize(text, tag, cap)
+          method = getattr(self.summarizer, "method", "extractive")
           mid = self.memory.put(text)  # type: ignore[union-attr]
           self.overflow_freq[tag] = self.overflow_freq.get(tag, 0) + 1
           # For 'f', attach inline M# pointer as third element; for others, only summary text.
           new_line = ["f", summary, mid] if tag == "f" else [tag, summary]
           out_lines.append(json.dumps(new_line))
-          out_lines.append(json.dumps(["o", summary, mid, "extractive"]))
+          out_lines.append(json.dumps(["o", summary, mid, method]))
         else:
           out_lines.append(json.dumps(arr))
         continue
