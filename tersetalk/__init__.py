@@ -6,4 +6,5 @@ __all__ = [
   "protocol_jsonl",
   "structured",
   "memory",
+  "summarization",
 ]

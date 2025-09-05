@@ -11,10 +11,11 @@ if ROOT not in sys.path:
   sys.path.insert(0, ROOT)
 
 from tersetalk.protocol_jsonl import JSONLValidator
+from tersetalk.summarization import Summarizer
 
 
 def main() -> None:
-  ap = argparse.ArgumentParser(description="TerseTalk JSONL guard (PR-02)")
+  ap = argparse.ArgumentParser(description="TerseTalk JSONL guard (PR-02+PR-04)")
   ap.add_argument(
     "--caps",
     type=str,
@@ -25,6 +26,12 @@ def main() -> None:
     "--fail-on-mixed",
     action="store_true",
     help="Exit nonzero if mixed format detected.",
+  )
+  ap.add_argument(
+    "--summarizer",
+    choices=["extractive", "llmlingua"],
+    default="extractive",
+    help="Summarizer method for overflow summaries.",
   )
   ap.add_argument(
     "--input",
@@ -48,7 +55,7 @@ def main() -> None:
     with open(args.input, "r", encoding="utf-8") as f:
       data = f.read()
 
-  validator = JSONLValidator(caps=caps)
+  validator = JSONLValidator(caps=caps, summarizer=Summarizer(method=args.summarizer))
   mixed, idx = validator.detect_format_break(data)
   if mixed and args.fail_on_mixed:
     print(json.dumps({"mixed_format": True, "break_line": idx}), file=sys.stderr)
