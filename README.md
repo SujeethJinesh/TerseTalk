@@ -1,8 +1,18 @@
-# TerseTalk
+# TerseTalk — PR-01 Scaffold
 
-## Development Quickstart
+This repository contains the TerseTalk project. PR‑01 adds a minimal repository scaffold and a CLI skeleton.
 
-- `make setup` — create venv (Python 3.12 if available) and install dev deps
-- `make test` — run tests (pytest)
-- `make lint` — run ruff + black checks
-- `make dev` — placeholder; research runners coming soon (see RESEARCH_PROPOSAL.md)
+## Quickstart
+
+```bash
+make install
+python scripts/run_v05.py --help
+python scripts/run_v05.py --version
+python scripts/run_v05.py --task hotpotqa --system tersetalk --n 5 --seed 123 --dry-run
+```
+
+Notes
+
+PR‑00 reproducibility utilities live in `tersetalk/reproducibility.py`.
+
+The CLI here is a stub. Execution paths (datasets, models, protocol) arrive in later PRs.
