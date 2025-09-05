@@ -63,6 +63,7 @@
 
 - Preconditions:
   - Ensure local checks pass: `make fmt && make lint && make test`.
+  - For PR-00 specifically, run `make install && make test && make smoke` and include smoke JSON + pytest summary in the PR.
   - Claude CLI must work with Node LTS (>=18). On macOS with Homebrew:
     - `brew install node@20` and add `export PATH="/usr/local/opt/node@20/bin:$PATH"`.
   - Export `ANTHROPIC_API_KEY` in your shell.
@@ -84,7 +85,12 @@
   - Re-run `make fmt && make lint && make test`.
   - Re-run the review with a short “Re-review after applying your suggestions” preface.
   - Stop when Claude replies exactly: `Approved: no nits.` (case-sensitive, must match exactly)
-  - For research features, ask Claude to explicitly confirm alignment with RESEARCH_PROPOSAL.md (PR scope, metrics, minimal deps, and DoD).
+  - For research features, ask Claude to explicitly confirm alignment with `RESEARCH_PROPOSAL.md` (PR scope, metrics, minimal deps, and DoD). Always reference the relevant proposal section in your prompt.
+
+### Always reference RESEARCH_PROPOSAL.md
+
+- When requesting Claude review, start by citing the applicable section(s) in `RESEARCH_PROPOSAL.md` and ask Claude to judge alignment with that scope and spirit.
+- Keep diffs small (≤250 LOC/unit) and include DoD in the PR body.
 
 - Scope and pushback:
   - It’s fine to push back on large or out-of-scope requests; explain constraints and propose a minimal alternative, then ask Claude to confirm.
@@ -113,6 +119,17 @@
   - `make setup` (auto-detects Python 3.12; falls back to `python3` if unavailable)
 - Validate:
   - `make fmt && make lint && make test`
+
+Always use the local `.venv` when running any commands. Activate with `source .venv/bin/activate` before `make` if the Makefile does not manage activation for you.
+
+## PR Summaries (Running Log)
+
+Record a brief summary after each PR is merged to accelerate context-loading in new sessions. Include acceptance evidence and next steps.
+
+- PR-00 — Reproducibility Infrastructure:
+  - Summary: Adds `tersetalk/reproducibility.py` with `set_global_seed`, fingerprint helpers, tests, and a smoke script. Optional NumPy/Torch guarded.
+  - Evidence: pytest passed locally; smoke JSON showed same-seed equality and different-seed inequality. See PR body for JSON + pytest summary.
+  - Next: Proceed to PR-01 per `RESEARCH_PROPOSAL.md`.
 
 THE MAKE IT WORK FIRST FIELD GUIDE
 

@@ -48,7 +48,7 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
   - Do not recommend heavy tooling, broad refactors, or speculative defenses unless requested.
   - Favor Makefile/config tweaks, tiny doc fixes, and focused code nits.
 - Research-specific checks:
-  - Confirm PR scope aligns with proposal (≤250 LOC where feasible; includes context, before→after, public APIs, tests, DoD).
+  - Confirm PR scope aligns with `RESEARCH_PROPOSAL.md` (≤250 LOC where feasible; includes context, before→after, public APIs, tests, DoD). Explicitly call out alignment in your verdict.
   - Confirm minimal deps usage; optional deps are guarded; no unnecessary tool sprawl.
   - Check metrics hooks or placeholders align with the evaluation plan (Quality vs Tokens, SP optional, latency, overflow/memory stats).
 - Referencing code:
@@ -56,6 +56,16 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
   - Avoid echoing full files back; refer to filenames and line numbers when helpful.
 - Re-review:
   - When prompted “Re-review after applying your suggestions,” check changes, then either add concise follow-ups or reply exactly `Approved: no nits.`
+
+### For PR-00 — Reproducibility Infrastructure
+
+- Validate that `tersetalk/reproducibility.py` seeds Python, optional NumPy/Torch, and env vars as specified; returns the defaults dict.
+- Ensure tests pass without NumPy/Torch installed and cover same/different seed behavior and env var setting.
+- Require evidence in PR body: pytest summary and `scripts/repro_smoke.py` JSON output.
+
+### Environment usage
+
+- Always assume a local `.venv` is used (`source .venv/bin/activate`). Prefer commands that respect the active venv.
 
 ## Notes
 
