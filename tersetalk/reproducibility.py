@@ -54,12 +54,14 @@ def set_global_seed(seed: int) -> Dict[str, Any]:
       try:
         _torch.use_deterministic_algorithms(True)  # type: ignore[attr-defined]
       except Exception:
+        # May not exist or may be unsupported on some PyTorch versions
         pass
       # cuDNN flags (safe to set on CPU-only too)
       try:
         _torch.backends.cudnn.deterministic = True  # type: ignore[attr-defined]
         _torch.backends.cudnn.benchmark = False  # type: ignore[attr-defined]
       except Exception:
+        # Some backends may be unavailable; skip without failing
         pass
     except Exception:
       # Do not fail the whole setup if torch misbehaves on the host
@@ -140,4 +142,3 @@ def snapshot_prng_state(n: int = 5) -> Dict[str, Optional[List[float]]]:
 def fingerprint_snapshot(n: int = 5) -> str:
   """One-line helper: hash of the current PRNG snapshot."""
   return _stable_json_hash(snapshot_prng_state(n=n))
-

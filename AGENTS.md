@@ -78,12 +78,14 @@
 - Recommended command shape:
   - `( printf "<context + ask with @file refs only>\n" ) | claude -p --dangerously-skip-permissions --model opus`
 
-- Iteration loop:
-  - Capture Claude’s feedback verbatim in your task response (Claude may take longer when using @file references; this is normal).
-  - Apply only changes that meet the intent and keep diffs minimal.
-  - Re-run `make fmt && make lint && make test`.
-  - Re-run the review with a short “Re-review after applying your suggestions” preface.
-  - Stop when Claude replies exactly: `Approved: no nits.` (case-sensitive, must match exactly)
+- Iteration loop (multi-round, required):
+  - Self-review first: ensure changes compile, tests pass, and scope aligns with the proposal. Keep diffs minimal.
+  - Request Claude review using @file references only; instruct Claude to read `@RESEARCH_PROPOSAL.md` first.
+  - If Claude has comments: evaluate necessity. Implement minimal changes or respond with rationale for declining.
+  - After any changes: re-run `make test` (and `make smoke` when applicable).
+  - Re-run Claude review with a brief “Re-review after applying suggestions” note.
+  - Repeat until Claude replies exactly: `Approved: no nits.` and confirms proposal alignment.
+  - Perform a final self-review: confirm all tests pass and code quality meets your standard before requesting human review.
   - For research features, ask Claude to explicitly confirm alignment with `RESEARCH_PROPOSAL.md` (PR scope, metrics, minimal deps, and DoD). Always reference the relevant proposal section in your prompt.
 
 ### Always reference RESEARCH_PROPOSAL.md

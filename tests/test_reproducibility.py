@@ -53,6 +53,5 @@ def test_snapshot_keys_present():
 def test_invalid_seed_raises():
   with pytest.raises(ValueError):
     set_global_seed(-1)
-  # type: ignore[arg-type]
   with pytest.raises(ValueError):
-    set_global_seed("abc")  # pyright: ignore[reportArgumentType]
+    set_global_seed("abc")  # type: ignore[arg-type]
