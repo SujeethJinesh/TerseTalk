@@ -1,6 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
+
+# Ensure project root is importable when running as a script
+ROOT = os.path.dirname(os.path.dirname(__file__))
+if ROOT not in sys.path:
+  sys.path.insert(0, ROOT)
+
 from tersetalk.reproducibility import set_global_seed, fingerprint_snapshot
 
 
@@ -25,4 +33,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-
