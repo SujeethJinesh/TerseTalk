@@ -35,3 +35,6 @@ htmlcov/
 # Project outputs
 results/
 figures/
+
+# Calibration outputs
+configs/

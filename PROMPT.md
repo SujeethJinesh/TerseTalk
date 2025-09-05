@@ -2,385 +2,468 @@ Read through your AGENTS.md and ensure you follow that precisely. Make sure you 
 
 ### PR Summary
 
-PR‑H1 — Hybrid Gate
+PR‑H2 — calibrate_caps.py + library
 
-Role: You are a senior engineer implementing PR‑H1 after PR‑04 merged.
+Role: You are a senior engineer implementing PR‑H2 right after PR‑H1.
+Goal (from spec): Sweep {caps, summarizer, deref_policy, gate_on/off, token_budget} on a 50‑example shard; select the best combo; write it to configs/calibration.yaml.
+Constraints:
 
-Goal (from spec):
-Create a lightweight hybrid gate that, for a single turn, routes to:
+Offline, stdlib‑only (llmlingua optional but not required).
 
-"tersetalk" if the estimated tokens for the JSONL message are within budget; else
+Deterministic given the same seed and inputs.
 
-"freeform_llmlingua" iff a projected LLMLingua compression meets the budget; else
+Do not implement deref behavior yet—only treat deref_policy as a recorded parameter.
 
-fallback to "tersetalk" (with overflow).
+Keep prior PR tests green.
 
-Provide a small CLI to demo decisions and extend the main runner to surface gate info in --dry-run. Keep everything offline‑safe; llmlingua is optional.
+What “best” means (explicit policy for this PR):
+We minimize avg_est_tokens (estimated outgoing tokens per example) subject to avg_density ≥ density_min (default 0.75). If no candidate meets the threshold, choose the one with highest avg_density, breaking ties by lower avg_est_tokens.
 
-Key behaviors & constraints
+Scoring per example (offline & cheap):
 
-Stdlib‑only for this PR (llmlingua optional; import‑guard).
+Build a Manager JSONL (synthetic) → validate & overflow with the selected caps and summarizer.
 
-Token estimator: reuse the repo’s heuristic (≈ len(text)//4).
+Convert validated JSONL to a free‑form probe via jsonl_to_prose.
 
-Gate returns a JSON‑serializable dict with: route, est_tokens, and a notes field for traceability.
+If gate_on=True, run the Hybrid Gate (PR‑H1) with token_budget on the validated JSONL vs the free‑form probe.
 
-If llmlingua is not installed or errors, treat projection as unknown and choose "tersetalk".
+If route = "tersetalk" → tokens = estimate_tokens(validated_jsonl).
 
-Provide an escape hatch for tests: an env var TERSETALK_FAKE_LL2_COMPRESS=<int> that simulates the projected token count (no llmlingua needed).
+If route = "freeform_llmlingua" → tokens = returned "ll2" projection (if any); (by gate design this only happens when it fits budget).
 
-Do not implement full pipeline execution.
+Record density from validator stats, plus routed path.
 
-DoD (Definition of Done)
+Aggregate across examples: avg_est_tokens, avg_density, routed_freeform_frac, avg_overflow_rate.
 
-tersetalk/hybrid_gate.py with:
+Deliverables
 
-@dataclass GateCfg(token_budget:int=600, use_ll2_tags: tuple[str,...]=("f","p","q"))
+tersetalk/calibration.py — library with the sweep + selection logic (deterministic).
 
-estimate_tokens(text:str)->int
+scripts/calibrate_caps.py — CLI wrapper that prints a compact JSON report and writes configs/calibration.yaml (JSON is valid YAML).
 
-project_ll2_tokens(prompt:str, budget:int)->int|None
-Tries llmlingua; honors TERSETALK_FAKE_LL2_COMPRESS; returns None on failure/unavailable.
+Tests: tests/test_calibration.py ensuring determinism, schema correctness, and gate‑aware behavior (using gate’s FAKE env override).
 
-gate_choose_protocol(manager_jsonl:str, freeform_prompt:str, cfg:GateCfg)->dict
-
-scripts/hybrid_gate_smoke.py: CLI that prints a decision JSON for provided inputs/budget.
-
-Extend scripts/run_v05.py (dry‑run only) with optional flags:
-
---hybrid/--no-hybrid (default: --no-hybrid)
-
---token-budget <int> (default 600)
-
---gate-jsonl-probe <str> and --gate-freeform-probe <str> (optional; if provided, include a gate object in the printed JSON).
-
-Keep existing behavior intact; no execution mode changes.
-
-Tests (tests/test_hybrid_gate.py) covering:
-
-Routes "tersetalk" when JSONL ≤ budget.
-
-Routes "freeform_llmlingua" when JSONL > budget and a simulated llmlingua projection fits.
-
-Falls back to "tersetalk" when projection is unavailable/None.
-
-estimate_tokens sanity.
-
-All tests pass without llmlingua installed and without network.
+Add configs/ to .gitignore.
 
 Create/Update the following files exactly
 
-Keep earlier PRs’ files intact. Only add/modify what’s listed.
+1. Update .gitignore (append at the end)
 
-1. tersetalk/hybrid_gate.py (new)
+# Calibration outputs
+
+configs/
+
+2. tersetalk/calibration.py (new)
    from **future** import annotations
 
-import os
-from dataclasses import dataclass
-from typing import Dict, Optional
+import json
+import math
+import random
+import string
+from dataclasses import dataclass, asdict
+from pathlib import Path
+from typing import Dict, Iterable, List, Literal, Optional, Tuple
+
+from tersetalk.reproducibility import set_global_seed
+from tersetalk.protocol_jsonl import JSONLValidator
+from tersetalk.summarization import Summarizer
+from tersetalk.memory import MemoryStore
+from tersetalk.hybrid_gate import GateCfg, gate_choose_protocol, estimate_tokens
+
+# --------------------------
+
+# Synthetic shard generator
+
+# --------------------------
+
+\_LOREM = (
+"alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
+"omicron pi rho sigma tau upsilon phi chi psi omega"
+).split()
+
+def _rand_words(rng: random.Random, lo: int, hi: int) -> str:
+n = rng.randint(lo, hi)
+return " ".join(rng.choice(\_LOREM) for _ in range(n)).strip()
+
+def \_synth_example(rng: random.Random, idx: int) -> Dict:
+"""
+Produce a single synthetic Manager task with variability to trigger overflow.
+Deterministic for a fixed RNG state.
+"""
+goal = f"Compare entities and return the earlier or smaller value (case {idx})." # Alternate between date-like and description-like facts
+if idx % 3 == 0:
+f1 = f"Item A: 200{rng.randint(0,9)}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}"
+f2 = f"Item B: 199{rng.randint(0,9)}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}"
+else: # Longish facts to force caps
+f1 = \_rand_words(rng, 12, 28)
+f2 = \_rand_words(rng, 6, 18)
+
+    # Optional third fact to vary density
+    facts = [f1, f2]
+    if idx % 4 == 0:
+        facts.append(_rand_words(rng, 10, 20))
+
+    question = "Which is earlier or smaller? Provide only the answer."
+    # Compose JSONL (lenient mix to exercise normalizer)
+    lines: List[str] = [
+        '["r","M"]',
+        json.dumps(["g", goal]),
+    ]
+    for f in facts:
+        # mix array/object forms
+        if rng.random() < 0.5:
+            lines.append(json.dumps(["f", f]))
+        else:
+            lines.append(json.dumps({"f": f}))
+    # occasional assumptions/plans to change tag mix
+    if rng.random() < 0.5:
+        lines.append(json.dumps(["u", "Use ISO dates if dates are present."]))
+    if rng.random() < 0.4:
+        lines.append(json.dumps(["p", "Compare A and B; output one token."]))
+    lines.append(json.dumps(["q", "W", question]))
+    return {"jsonl": "\n".join(lines)}
+
+def synth_shard(n: int, seed: int) -> List[Dict]:
+rng = random.Random(seed)
+return [_synth_example(rng, i) for i in range(n)]
+
+# --------------------------
+
+# Grid + scoring
+
+# --------------------------
+
+Caps = Dict[str, int]
+SummMethod = Literal["extractive", "llmlingua"]
+DerefPolicy = Literal["never", "conditional", "always"] # placeholder for PR-H4
+
+def default_caps_grid() -> List[Caps]:
+return [
+{"f": 20, "p": 15, "q": 20, "g": 30, "u": 20, "t": 50}, # aggressive
+{"f": 30, "p": 20, "q": 30, "g": 30, "u": 20, "t": 50}, # baseline
+{"f": 50, "p": 40, "q": 50, "g": 40, "u": 25, "t": 60}, # relaxed
+{"f": 100, "p": 80, "q": 100, "g": 60, "u": 30, "t": 80}, # very relaxed
+]
+
+@dataclass(frozen=True)
+class CalibSpec:
+caps: Caps
+summarizer: SummMethod
+deref_policy: DerefPolicy
+gate_enabled: bool
+token_budget: int
 
 @dataclass
-class GateCfg:
+class CalibMetrics:
+avg_est_tokens: float
+avg_density: float
+avg_overflow_rate: float
+routed_freeform_frac: float
+n: int
+
+@dataclass
+class CalibEval:
+spec: CalibSpec
+metrics: CalibMetrics
+
+def evaluate_spec_on_shard(shard: List[Dict], spec: CalibSpec, seed: int) -> CalibEval:
 """
-Configuration for the per-turn hybrid gate.
+Evaluate one calibration spec on a synthetic shard.
+Deterministic for fixed (shard, spec, seed).
+""" # Ensure deterministic behavior of any randomness in summarizer/validator code paths.
+set_global_seed(seed)
 
-    token_budget: maximum allowed tokens for the outgoing message.
-    use_ll2_tags: reserved for future fine-grain control of which tags to compress;
-                  kept here to match the spec, not used in PR-H1 logic.
-    """
-    token_budget: int = 600
-    use_ll2_tags: tuple[str, ...] = ("f", "p", "q")
+    summarizer = Summarizer(method=spec.summarizer)
 
-def estimate_tokens(text: str) -> int:
+    densities: List[float] = []
+    token_estimates: List[int] = []
+    overflow_rates: List[float] = []
+    routed_freeform = 0
+    gate_cfg = GateCfg(token_budget=spec.token_budget)
+
+    for ex in shard:
+        memory = MemoryStore()
+        validator = JSONLValidator(caps=spec.caps, memory=memory, summarizer=summarizer)
+
+        # Normalize/overflow with the selected caps/summarizer
+        validated_jsonl, stats = validator.validate_and_overflow(ex["jsonl"])
+
+        # Free-form probe
+        freeform = validator.jsonl_to_prose(validated_jsonl)
+
+        # Gate decision
+        if spec.gate_enabled:
+            decision = gate_choose_protocol(validated_jsonl, freeform, gate_cfg)
+            route = decision["route"]
+            if route == "freeform_llmlingua":
+                routed_freeform += 1
+                ll2 = decision["est_tokens"].get("ll2")
+                # ll2 must exist for the route to be freeform in our gate logic
+                token_estimates.append(int(ll2))
+            else:
+                token_estimates.append(estimate_tokens(validated_jsonl))
+        else:
+            # No gate: always TerseTalk tokens post-validation
+            token_estimates.append(estimate_tokens(validated_jsonl))
+
+        densities.append(float(stats["density"]))
+        of_count = stats["overflow"]["count"]
+        total_lines = max(1, stats["lines_total"])
+        overflow_rates.append(of_count / total_lines)
+
+        # Reset memory between tasks (explicitly, though validator has no shared state)
+        memory.reset()
+
+    n = len(shard)
+    metrics = CalibMetrics(
+        avg_est_tokens=sum(token_estimates) / n if n else 0.0,
+        avg_density=sum(densities) / n if n else 0.0,
+        avg_overflow_rate=sum(overflow_rates) / n if n else 0.0,
+        routed_freeform_frac=(routed_freeform / n) if n else 0.0,
+        n=n,
+    )
+    return CalibEval(spec=spec, metrics=metrics)
+
+def sweep_grid(
+n: int,
+seed: int,
+caps_grid: List[Caps],
+summarizers: List[SummMethod],
+deref_policies: List[DerefPolicy],
+gate_modes: List[bool],
+token_budgets: List[int],
+density_min: float = 0.75,
+) -> Dict:
 """
-Cheap token estimator used repo-wide (~4 chars ≈ 1 token).
-Non-negative and monotonic w.r.t len(text).
+Run a full sweep over the grid and return a deterministic report dict:
+{
+"n": int, "seed": int, "density_min": float,
+"grid_evaluations": [ { "spec": {...}, "metrics": {...} }, ... ],
+"best": { "spec": {...}, "metrics": {...} }
+}
 """
-if not text:
-return 0 # round up slightly to be conservative
-return max(0, (len(text) + 3) // 4)
+shard = synth_shard(n=n, seed=seed)
+evals: List[CalibEval] = []
 
-def \_fake_ll2_env_projection() -> Optional[int]:
-"""
-Testing escape hatch: if TERSETALK_FAKE_LL2_COMPRESS is set,
-return that integer (simulates projected token count).
-"""
-val = os.environ.get("TERSETALK_FAKE_LL2_COMPRESS")
-if val is None:
-return None
-try:
-return int(val)
-except Exception:
-return None
+    # Deterministic iteration order
+    for caps in caps_grid:
+        for sm in summarizers:
+            for dp in deref_policies:
+                for gate_on in gate_modes:
+                    for budget in token_budgets:
+                        spec = CalibSpec(
+                            caps=caps,
+                            summarizer=sm,
+                            deref_policy=dp,
+                            gate_enabled=gate_on,
+                            token_budget=int(budget),
+                        )
+                        ev = evaluate_spec_on_shard(shard, spec, seed=seed)
+                        evals.append(ev)
 
-def project_ll2_tokens(prompt: str, budget: int) -> Optional[int]:
-"""
-Try to project the compressed token length using llmlingua (if available).
-Returns an integer token count or None if unavailable/error.
+    # Selection: filter by density_min; pick lowest avg_est_tokens
+    def _rank_key(ev: CalibEval) -> Tuple[float, float, float]:
+        # Lower tokens better; higher density better; lower freeform frac better (tie-breaker)
+        return (ev.metrics.avg_est_tokens, -ev.metrics.avg_density, ev.metrics.routed_freeform_frac)
 
-    Honors TERSETALK_FAKE_LL2_COMPRESS to enable offline tests without the package.
-    """
-    fake = _fake_ll2_env_projection()
-    if fake is not None:
-        return fake
+    feasible = [ev for ev in evals if ev.metrics.avg_density >= density_min]
+    chosen: CalibEval
+    if feasible:
+        feasible.sort(key=_rank_key)
+        chosen = feasible[0]
+    else:
+        # No candidate meets density; pick by highest density then lowest tokens
+        evals.sort(key=lambda ev: (-ev.metrics.avg_density, ev.metrics.avg_est_tokens))
+        chosen = evals[0]
 
-    try:
-        from llmlingua import PromptCompressor  # type: ignore
-    except Exception:
-        return None
+    # Deterministic JSON-like report (JSON is valid YAML)
+    def _ev_to_dict(ev: CalibEval) -> Dict:
+        return {"spec": asdict(ev.spec), "metrics": asdict(ev.metrics)}
 
-    try:
-        comp = PromptCompressor()
-        # target_token sets a goal, but we just need the returned size estimate.
-        res = comp.compress(prompt, target_token=budget)
-        # Common keys used by llmlingua returns
-        for key in ("compressed_tokens", "target_token", "projected_tokens", "tokens"):
-            v = res.get(key)
-            if isinstance(v, int) and v >= 0:
-                return v
-        # Fall back to measuring compressed string if provided
-        for k in ("compressed_prompt", "compressed_text"):
-            s = res.get(k)
-            if isinstance(s, str):
-                return estimate_tokens(s)
-        return None
-    except Exception:
-        return None
-
-def gate_choose_protocol(manager_jsonl: str, freeform_prompt: str, cfg: GateCfg) -> Dict:
-"""
-Decide which path to use for the current turn.
-
-    Strategy:
-      1) If JSONL estimate <= budget → "tersetalk".
-      2) Else try llmlingua projection on freeform; if <= budget → "freeform_llmlingua".
-      3) Else → "tersetalk" (with overflow).
-
-    Returns a dict:
-    {
-      "route": "tersetalk" | "freeform_llmlingua",
-      "est_tokens": {"jsonl": int, "ll2": Optional[int]},
-      "notes": str
+    report = {
+        "n": n,
+        "seed": seed,
+        "density_min": density_min,
+        "grid_evaluations": [_ev_to_dict(ev) for ev in evals],
+        "best": _ev_to_dict(chosen),
     }
-    """
-    t_jsonl = estimate_tokens(manager_jsonl)
-    if t_jsonl <= cfg.token_budget:
-        return {
-            "route": "tersetalk",
-            "est_tokens": {"jsonl": t_jsonl, "ll2": None},
-            "notes": "JSONL within budget; chose tersetalk."
-        }
+    return report
 
-    t_ll2 = project_ll2_tokens(freeform_prompt, cfg.token_budget)
-    if t_ll2 is not None and t_ll2 <= cfg.token_budget:
-        return {
-            "route": "freeform_llmlingua",
-            "est_tokens": {"jsonl": t_jsonl, "ll2": t_ll2},
-            "notes": "JSONL over budget; LLMLingua projection fits -> freeform_llmlingua."
-        }
+def save_calibration_yaml(report: Dict, out_path: str | Path) -> Path:
+"""
+Write the report as JSON (which is valid YAML 1.2) to out_path.
+Returns the Path. Deterministic content (no timestamps).
+"""
+p = Path(out_path)
+p.parent.mkdir(parents=True, exist_ok=True) # JSON subset of YAML => valid .yaml
+text = json.dumps(report, indent=2, sort_keys=True)
+p.write_text(text, encoding="utf-8")
+return p
 
-    return {
-        "route": "tersetalk",
-        "est_tokens": {"jsonl": t_jsonl, "ll2": t_ll2},
-        "notes": "JSONL over budget; LLMLingua unavailable or still over -> tersetalk (overflow as needed)."
-    }
-
-2. scripts/hybrid_gate_smoke.py (new)
+3. scripts/calibrate_caps.py (new)
    from **future** import annotations
 
 import argparse
 import json
-from tersetalk.hybrid_gate import GateCfg, gate_choose_protocol
+import sys
+from typing import List
 
-EXAMPLE_JSONL = '["r","M"]\n["g","Compare dates"]\n["f","Event A: 2001-07-16"]\n["f","Event B: 1999-05-02"]\n["q","W","Which is earlier?"]'
-EXAMPLE_FREEFORM = "Role: Manager\nGoal: Compare dates\nFacts: Event A: 2001-07-16; Event B: 1999-05-02\nQuestion: Which is earlier?"
+from tersetalk.calibration import (
+default_caps_grid,
+sweep_grid,
+save_calibration_yaml,
+)
+
+def \_parse_caps_grid(s: str) -> List[dict]:
+try:
+val = json.loads(s)
+if isinstance(val, list) and all(isinstance(x, dict) for x in val):
+return val
+except Exception:
+pass
+raise SystemExit("Error: --caps-grid must be a JSON list of objects, e.g. "
+"'[{\"f\":20,\"p\":15,\"q\":20},{\"f\":30,\"p\":20,\"q\":30}]'")
+
+def \_csv_list(s: str) -> List[str]:
+return [x.strip() for x in s.split(",") if x.strip()]
+
+def \_csv_ints(s: str) -> List[int]:
+try:
+return [int(x) for x in _csv_list(s)]
+except Exception as e:
+raise SystemExit(f"Error parsing integer list: {e}") from e
 
 def main():
-ap = argparse.ArgumentParser(description="PR-H1 hybrid gate smoke tool")
-ap.add_argument("--jsonl", default=EXAMPLE_JSONL, help="JSONL probe text")
-ap.add_argument("--freeform", default=EXAMPLE_FREEFORM, help="Free-form probe text")
-ap.add_argument("--token-budget", type=int, default=600, help="Token budget for gate")
+ap = argparse.ArgumentParser(description="PR-H2: Calibration sweep for caps/summarizer/gate")
+ap.add_argument("--n", type=int, default=50, help="Number of synthetic examples")
+ap.add_argument("--seed", type=int, default=0, help="Random seed for determinism")
+ap.add_argument("--out", type=str, default="configs/calibration.yaml", help="Output YAML path")
+ap.add_argument("--density-min", type=float, default=0.75, help="Min avg density required")
+ap.add_argument("--caps-grid", type=str, default="", help="JSON list of caps dicts (overrides defaults)")
+ap.add_argument("--summarizers", type=str, default="extractive", help="Comma list among {extractive,llmlingua}")
+ap.add_argument("--deref-policies", type=str, default="never,conditional,always", help="Comma list (placeholder)")
+ap.add_argument("--gate-modes", type=str, default="off,on", help="Comma list among {off,on}")
+ap.add_argument("--token-budgets", type=str, default="400,600,800", help="Comma list of integers")
 args = ap.parse_args()
 
-    cfg = GateCfg(token_budget=args.token_budget)
-    decision = gate_choose_protocol(args.jsonl, args.freeform, cfg)
-    print(json.dumps({"cfg": cfg.__dict__, "decision": decision}, indent=2))
+    caps_grid = _parse_caps_grid(args.caps_grid) if args.caps_grid else default_caps_grid()
+    summarizers = _csv_list(args.summarizers)
+    deref_pols = _csv_list(args.deref_policies)
+    gate_modes = [g.lower() in ("on", "true", "1", "yes") for g in _csv_list(args.gate_modes)]
+    budgets = _csv_ints(args.token_budgets)
 
-if **name** == "**main**":
-main()
+    report = sweep_grid(
+        n=int(args.n),
+        seed=int(args.seed),
+        caps_grid=caps_grid,
+        summarizers=summarizers,              # type: ignore[arg-type]
+        deref_policies=deref_pols,            # type: ignore[arg-type]
+        gate_modes=gate_modes,
+        token_budgets=budgets,
+        density_min=float(args.density_min),
+    )
+    out_path = save_calibration_yaml(report, args.out)
 
-3. Update scripts/run_v05.py to surface optional gate info (replace the file with this version)
-
-Keep existing CLI options and behavior. Add optional hybrid flags that only affect dry‑run output by including a gate object if probes are provided.
-
-from **future** import annotations
-
-import json
-import sys
-import click
-
-from tersetalk.\_version import **version**
-from tersetalk.reproducibility import set_global_seed
-
-# Optional hybrid import guarded so tests remain offline-safe
-
-try:
-from tersetalk.hybrid_gate import GateCfg, gate_choose_protocol
-except Exception: # pragma: no cover
-GateCfg = None
-gate_choose_protocol = None
-
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-
-@click.command(context_settings=CONTEXT_SETTINGS)
-@click.option("--task", type=click.Choice(["hotpotqa", "gsm8k"]), default="hotpotqa", show_default=True, help="Benchmark task to run.")
-@click.option("--system", type=click.Choice(["tersetalk", "freeform", "llmlingua"]), default="tersetalk", show_default=True, help="System variant to run.")
-@click.option("--n", default=100, show_default=True, help="Number of examples.")
-@click.option("--seed", default=0, show_default=True, help="Global random seed.")
-@click.option("--caps", default='{"f":30,"p":20,"q":30}', show_default=True, help="Soft caps JSON for tags.")
-@click.option("--model", default="mistral", show_default=True, help="Model name (placeholder).")
-@click.option("--out", default="results", show_default=True, help="Output directory.")
-@click.option("--dry-run/--execute", default=True, show_default=True, help="Dry-run prints parsed config JSON and exits 0.")
-
-# --- Hybrid gate optional probes (dry-run only) ---
-
-@click.option("--hybrid/--no-hybrid", default=False, show_default=True, help="Include hybrid gate decision in dry-run output if probe texts are provided.")
-@click.option("--token-budget", default=600, show_default=True, help="Token budget for hybrid gate (dry-run only).")
-@click.option("--gate-jsonl-probe", default=None, help="JSONL probe text for the gate (dry-run only).")
-@click.option("--gate-freeform-probe", default=None, help="Free-form probe text for the gate (dry-run only).")
-@click.version_option(version=**version**, prog_name="tersetalk v0.5 runner")
-def main(task, system, n, seed, caps, model, out, dry_run, hybrid, token_budget, gate_jsonl_probe, gate_freeform_probe):
-"""
-TerseTalk v0.5 Runner (PR-01 scaffold + PR-H1 gate in dry-run)
-
-    This command provides a CLI skeleton only. Use --dry-run (default) to print
-    the parsed configuration. Execution paths are implemented in later PRs.
-    """
-    try:
-        parsed_caps = json.loads(caps)
-        if not isinstance(parsed_caps, dict):
-            raise ValueError
-    except Exception:
-        click.echo(
-            'Error: --caps must be a JSON object, e.g. \'{"f":30,"p":20,"q":30}\'',
-            err=True,
-        )
-        sys.exit(2)
-
-    defaults = set_global_seed(int(seed))
-    cfg = {
-        "task": task,
-        "system": system,
-        "n": int(n),
-        "seed": int(seed),
-        "caps": parsed_caps,
-        "model": model,
-        "out": out,
-        "defaults": defaults,
-        "mode": "dry-run" if dry_run else "execute",
+    # Also print a compact JSON summary to stdout (helpful for CI)
+    best = report["best"]
+    summary = {
+        "out_path": str(out_path),
+        "n": report["n"],
+        "seed": report["seed"],
+        "density_min": report["density_min"],
+        "best_spec": best["spec"],
+        "best_metrics": best["metrics"],
     }
-
-    # Optional gate preview for dry-run
-    gate_obj = None
-    if dry_run and hybrid and gate_jsonl_probe and gate_freeform_probe and GateCfg and gate_choose_protocol:
-        try:
-            gcfg = GateCfg(token_budget=int(token_budget))
-            gate_obj = gate_choose_protocol(gate_jsonl_probe, gate_freeform_probe, gcfg)
-        except Exception as e:  # keep dry-run robust
-            gate_obj = {"error": str(e)}
-    cfg["gate"] = gate_obj
-
-    click.echo(json.dumps(cfg, indent=2))
-
-    if dry_run:
-        sys.exit(0)
-
-    # Execution path intentionally unimplemented at this stage
-    click.echo("Execution mode is not implemented yet.", err=True)
-    sys.exit(0)
+    print(json.dumps(summary, indent=2))
 
 if **name** == "**main**":
 main()
 
-4. tests/test_hybrid_gate.py (new)
+4. tests/test_calibration.py (new)
    from **future** import annotations
 
+import json
 import os
-from contextlib import contextmanager
+import subprocess
+import sys
+from pathlib import Path
+from typing import Tuple
 
-from tersetalk.hybrid_gate import GateCfg, estimate_tokens, gate_choose_protocol
+ROOT = Path(**file**).resolve().parents[1]
+PY = sys.executable
 
-JSONL_SHORT = '["r","M"]\n["g","Short goal"]\n["q","W","?"]'
-FREEFORM_LONG = "Goal: " + ("alpha beta gamma " \* 300)
+def \_run(args: list[str]) -> Tuple[int, str, str]:
+p = subprocess.run(args, cwd=str(ROOT), capture_output=True, text=True)
+return p.returncode, p.stdout, p.stderr
 
-@contextmanager
-def fake_ll2_projection(value: int | None):
-"""
-Sets TERSETALK_FAKE_LL2_COMPRESS to simulate llmlingua projected tokens.
-Pass None to clear it.
-"""
-old = os.environ.get("TERSETALK_FAKE_LL2_COMPRESS")
-try:
-if value is None:
-os.environ.pop("TERSETALK_FAKE_LL2_COMPRESS", None)
-else:
-os.environ["TERSETALK_FAKE_LL2_COMPRESS"] = str(value)
-yield
-finally:
-if old is None:
-os.environ.pop("TERSETALK_FAKE_LL2_COMPRESS", None)
-else:
-os.environ["TERSETALK_FAKE_LL2_COMPRESS"] = old
+def test_calibration_writes_yaml_and_schema(tmp_path: Path):
+outp = tmp_path / "calib.yaml"
+code, out, err = \_run([
+PY, "scripts/calibrate_caps.py",
+"--n", "24",
+"--seed", "123",
+"--out", str(outp),
+"--density-min", "0.6",
+"--summarizers", "extractive", # keep tests offline
+"--gate-modes", "off,on",
+"--token-budgets", "120,240",
+])
+assert code == 0, err
+assert outp.exists() and outp.read_text().strip() # File is JSON (valid YAML) → parse to verify schema
+data = json.loads(outp.read_text())
+assert "best" in data and "grid_evaluations" in data and data["n"] == 24
+best = data["best"]
+assert "spec" in best and "metrics" in best
+assert isinstance(best["metrics"]["avg_est_tokens"], (int, float))
+assert 0.0 <= best["metrics"]["avg_density"] <= 1.0
 
-def test_estimate_tokens_monotonic_and_nonnegative():
-assert estimate_tokens("") == 0
-a = estimate_tokens("abcd") # ~1
-b = estimate_tokens("abcd" \* 10)
-assert a >= 0 and b >= a and b > 0
-
-def test_gate_routes_tersetalk_when_within_budget():
-cfg = GateCfg(token_budget=50)
-decision = gate_choose_protocol(JSONL_SHORT, FREEFORM_LONG, cfg)
-assert decision["route"] == "tersetalk"
-assert decision["est_tokens"]["jsonl"] <= 50
-
-def test_gate_routes_freeform_llmlingua_when_projection_fits(): # Force JSONL to exceed budget while LL2 projection fits
-jsonl = '["g","' + ("x" * 2000) + '"]' # very long jsonl payload
-freeform = "alpha beta gamma " \* 200
-cfg = GateCfg(token_budget=120)
-
-    with fake_ll2_projection(100):  # simulate LL2 compressed within budget
-        decision = gate_choose_protocol(jsonl, freeform, cfg)
-        assert decision["route"] == "freeform_llmlingua"
-        assert decision["est_tokens"]["ll2"] == 100
-
-def test_gate_falls_back_to_tersetalk_when_projection_unavailable(): # Long JSONL, LL2 unavailable -> tersetalk
-jsonl = '["g","' + ("x" * 2000) + '"]'
-freeform = "alpha beta gamma " \* 200
-cfg = GateCfg(token_budget=120)
-
-    with fake_ll2_projection(None):  # ensure no fake projection
-        decision = gate_choose_protocol(jsonl, freeform, cfg)
-        assert decision["route"] == "tersetalk"
-        # ll2 estimate may be None in this case
-        assert decision["est_tokens"]["jsonl"] > cfg.token_budget
-
-5. Update tersetalk/**init**.py to export hybrid_gate (replace file)
-   from .\_version import **version**
-
-**all** = [
-"__version__",
-"reproducibility",
-"protocol_jsonl",
-"structured",
-"memory",
-"summarization",
-"hybrid_gate",
+def test_determinism_same_seed_same_output(tmp_path: Path):
+out1 = tmp_path / "a.yaml"
+out2 = tmp_path / "b.yaml"
+cmd = [
+PY, "scripts/calibrate_caps.py",
+"--n", "30",
+"--seed", "7",
+"--out", str(out1),
+"--density-min", "0.7",
+"--summarizers", "extractive",
+"--gate-modes", "off,on",
+"--token-budgets", "150,300",
 ]
+code, out, err = \_run(cmd)
+assert code == 0, err # rerun with identical args to a different file
+cmd2 = cmd.copy()
+cmd2[-3] = str(out2) # replace outfile
+code2, outb, errb = \_run(cmd2)
+assert code2 == 0, errb # Deterministic content
+assert out1.read_text() == out2.read_text()
+
+def test_gate_affects_routing_with_fake_ll2(tmp_path: Path, monkeypatch):
+"""
+Use TERSETALK_FAKE_LL2_COMPRESS to ensure some routing to freeform when gate is on.
+"""
+outp = tmp_path / "calib.yaml"
+monkeypatch.setenv("TERSETALK_FAKE_LL2_COMPRESS", "80")
+code, out, err = \_run([
+PY, "scripts/calibrate_caps.py",
+"--n", "20",
+"--seed", "42",
+"--out", str(outp),
+"--density-min", "0.5",
+"--summarizers", "extractive",
+"--gate-modes", "off,on",
+"--token-budgets", "100,120",
+])
+assert code == 0, err
+data = json.loads(outp.read_text()) # At least one evaluated spec with gate enabled should have routed_freeform_frac > 0.0
+assert any(
+ev["spec"]["gate_enabled"] and ev["metrics"]["routed_freeform_frac"] > 0.0
+for ev in data["grid_evaluations"]
+)
 
 What to run (and what to paste as evidence in the PR)
 
-Install
+Install (unchanged)
 
 make install
 
@@ -388,40 +471,55 @@ Run tests
 
 make test
 
-Smoke: simple decision (default examples)
+Calibrate with defaults (50 examples)
 
-python scripts/hybrid_gate_smoke.py --token-budget 120
+python scripts/calibrate_caps.py
 
-Smoke: force LL2 route (offline via env var)
+Calibrate with custom grid + gate preview (offline, with fake LL2 projection)
 
-export TERSETALK_FAKE_LL2_COMPRESS=100
-python scripts/hybrid_gate_smoke.py --token-budget 120 \
- --jsonl "$([ -f /bin/yes ] && yes x | head -c 4000 | sed 's/.*/["g","&"]/' || echo '["g","x..."]')" \
-  --freeform "$(python - <<'PY'\nprint('alpha beta gamma ' \* 200)\nPY)"
+export TERSETALK_FAKE_LL2_COMPRESS=90
+python scripts/calibrate_caps.py \
+ --n 50 --seed 123 --density-min 0.7 \
+ --summarizers extractive \
+ --gate-modes off,on \
+ --token-budgets 400,600,800
 unset TERSETALK_FAKE_LL2_COMPRESS
 
-Runner dry‑run with gate preview
-
-python scripts/run_v05.py --dry-run --hybrid \
- --token-budget 120 \
- --gate-jsonl-probe '["g","xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]' \
- --gate-freeform-probe 'Goal: many x; Question: ?'
-
-Acceptance evidence to paste in PR description:
+Acceptance evidence to paste in the PR description:
 
 ✅ pytest summary (all green).
 
-✅ hybrid_gate_smoke.py JSON showing a decision with route, est_tokens, and notes.
+✅ Sample of the printed JSON summary from calibrate_caps.py showing best_spec, best_metrics, and out_path.
 
-✅ A second smoke where TERSETALK_FAKE_LL2_COMPRESS causes routing to "freeform_llmlingua".
+✅ The saved configs/calibration.yaml (JSON-as-YAML) with fields:
 
-✅ run_v05.py --dry-run output includes a gate object when hybrid probes are given.
+n, seed, density_min
+
+grid_evaluations (array of spec+metrics)
+
+best.spec.caps, best.spec.summarizer, best.spec.gate_enabled, best.spec.token_budget
+
+best.metrics.avg_est_tokens, best.metrics.avg_density, best.metrics.routed_freeform_frac
 
 Commit message
-PR-H1: Per-turn hybrid gate (TerseTalk vs Free-form+LLMLingua)
+PR-H2: Calibration sweep for caps/summarizer/gate → configs/calibration.yaml
 
-- Add tersetalk/hybrid_gate.py with GateCfg, estimate_tokens, project_ll2_tokens (llmlingua optional), and gate_choose_protocol
-- Provide scripts/hybrid_gate_smoke.py to demo decisions
-- Extend scripts/run_v05.py to optionally include gate preview in --dry-run via probes and token budget
-- Add tests for routing logic (within budget, ll2-projection fit, unavailable projection) and estimator sanity
-- No new hard dependencies; llmlingua path is import-guarded; tests pass offline
+- Add tersetalk/calibration.py:
+
+  - Deterministic synthetic shard generator
+  - Grid sweep across {caps, summarizer, deref_policy (placeholder), gate on/off, token_budget}
+  - Per-spec evaluation using JSONLValidator, Summarizer, MemoryStore, and Hybrid Gate
+  - Selection: minimize avg_est_tokens subject to avg_density ≥ density_min (fallback to highest density)
+  - save_calibration_yaml() writes JSON (valid YAML) deterministically
+
+- Add scripts/calibrate_caps.py CLI:
+
+  - Configurable grid via flags; prints compact JSON summary and writes configs/calibration.yaml
+
+- Add tests/test_calibration.py:
+
+  - Schema + file creation
+  - Determinism (same seed → identical file)
+  - Gate effect using TERSETALK_FAKE_LL2_COMPRESS
+
+- Update .gitignore to ignore configs/

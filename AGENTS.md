@@ -168,6 +168,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; smoke shows `route`, `est_tokens`, and `notes`; env var `TERSETALK_FAKE_LL2_COMPRESS` demo routes to `freeform_llmlingua`; dry‑run output includes `gate` object when probes provided.
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
 
+- PR‑H2 — Calibration Sweep:
+  - Summary: Adds `tersetalk/calibration.py` and `scripts/calibrate_caps.py` to sweep {caps, summarizer, deref_policy (placeholder), gate on/off, token_budget} on a synthetic shard; selects best per policy and writes `configs/calibration.yaml` (JSON-as-YAML). Deterministic, stdlib-only; Hybrid Gate consulted when enabled.
+  - Evidence: pytest all green; CLI prints compact summary (best_spec + best_metrics) and writes `configs/calibration.yaml`. Gate effect verified via `TERSETALK_FAKE_LL2_COMPRESS` (routed_freeform_frac > 0 when on).
+  - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
