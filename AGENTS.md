@@ -69,18 +69,17 @@
   - Export `ANTHROPIC_API_KEY` in your shell.
   - Quick sanity check: `echo "pong" | claude -p --dangerously-skip-permissions --model opus` ⇒ outputs `pong`.
 
-- Prompt template (pipe only the files you touched):
+- Prompt template (reference-only; do not paste file contents):
   - Start with a 1–2 sentence goal and explicit ask for a verdict.
-  - Include focus areas relevant to the change.
-  - For each file, send as:
-    - `File: path/to/file\n---\n<file contents>`
+  - Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` (relevant PR section) first.
+  - List edited files using `@` references only (e.g., `@tersetalk/reproducibility.py`, `@tests/test_reproducibility.py`).
   - End with: `If fully acceptable with no nits, explicitly reply: 'Approved: no nits.'`
 
 - Recommended command shape:
-  - `( printf "<context + ask>\n\n"; printf "File: X\n---\n"; sed -n '1,200p' X; ... ) | claude -p --dangerously-skip-permissions --model opus` (the `sed -n '1,200p'` prints the first 200 lines)
+  - `( printf "<context + ask with @file refs only>\n" ) | claude -p --dangerously-skip-permissions --model opus`
 
 - Iteration loop:
-  - Capture Claude’s feedback verbatim in your task response.
+  - Capture Claude’s feedback verbatim in your task response (Claude may take longer when using @file references; this is normal).
   - Apply only changes that meet the intent and keep diffs minimal.
   - Re-run `make fmt && make lint && make test`.
   - Re-run the review with a short “Re-review after applying your suggestions” preface.
@@ -104,8 +103,8 @@
 
 - Hygiene:
   - Never pipe secrets or `.env` contents to Claude.
-  - Send only the specific files you edited; avoid dumping unrelated large files.
-  - Keep each file excerpt <=200 lines where possible; trim to relevant hunks if larger.
+  - Reference only the specific files you edited with `@path` (no file bodies).
+  - It's expected that Claude fetches referenced files; avoid pasting long excerpts.
 
 ## Troubleshooting Claude CLI
 
@@ -134,7 +133,7 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
 
 - PR-00 — Reproducibility Infrastructure:
   - Summary: Adds `tersetalk/reproducibility.py` with `set_global_seed`, fingerprint helpers, tests, and a smoke script. Optional NumPy/Torch guarded.
-  - Evidence: pytest passed locally (6 passed); smoke JSON: `same_seed_equal: true`, `diff_seed_unequal: true`. Full JSON and pytest summary included in PR body.
+  - Evidence: pytest passed locally (7 passed); smoke JSON: `same_seed_equal: true`, `diff_seed_unequal: true`. Full JSON and pytest summary included in PR body.
   - Next: Proceed to PR-01 per `RESEARCH_PROPOSAL.md`.
 
 THE MAKE IT WORK FIRST FIELD GUIDE
