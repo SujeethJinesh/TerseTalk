@@ -74,6 +74,18 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
 - Ensure PR‑00 files and tests remain intact and passing.
 - Confirm runtime deps minimality (click, tqdm); no heavy tooling added.
 
+### For PR-02 — JSONL Protocol & Validator
+
+- Read @RESEARCH_PROPOSAL.md PR‑02 scope first. Confirm strict adherence (no PR‑02S/PR‑03/PR‑04 features).
+- Verify `JSONLValidator` implements:
+  - mixed-format detection with (is_mixed, index)
+  - lenient object→canonical array normalization
+  - soft caps per tag with overflow: M# pointers + ["o", summary, M#k, "extractive"] lines
+  - overflow stats (count, per_tag, rate) and density proxy (1.0 − rate)
+  - `jsonl_to_prose` utility
+- Ensure tests cover detection, normalization, overflow behavior, and prose export.
+- Validate `scripts/jsonl_guard.py` outputs expected JSON and respects `--fail-on-mixed`.
+
 ## Notes
 
 - The .gitignore is configured for Python projects with comprehensive exclusions for common Python artifacts
