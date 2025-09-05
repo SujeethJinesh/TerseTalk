@@ -158,6 +158,16 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; smoke shows minted_ids, fetched echo mapping, and validator run with `o_refs_retrievable: true` plus non-zero overflow stats and density ∈ [0,1].
   - Next: Proceed to PR-04 Summarizer per `RESEARCH_PROPOSAL.md`.
 
+- PR-04 — Summarization Module:
+  - Summary: Adds `tersetalk/summarization.py` with Summarizer (extractive default; optional llmlingua), integrates into `JSONLValidator` so overflow summaries use the summarizer and record the method. Adds `scripts/summarize_smoke.py`, updates `scripts/jsonl_guard.py` with `--summarizer`, and adds tests.
+  - Evidence: pytest all green; summarizer smoke shows token reduction; guard outputs `o` lines with `method` field; validator interop verified.
+  - Next: Proceed to PR‑H1 Hybrid Gate per `RESEARCH_PROPOSAL.md`.
+
+- PR‑H1 — Hybrid Gate:
+  - Summary: Adds `tersetalk/hybrid_gate.py` with `GateCfg`, token estimator, optional llmlingua projection (import-guarded), and `gate_choose_protocol`. Extends `scripts/run_v05.py` dry‑run with optional gate preview and adds `scripts/hybrid_gate_smoke.py`. Tests cover routing and estimator.
+  - Evidence: pytest all green; smoke shows `route`, `est_tokens`, and `notes`; env var `TERSETALK_FAKE_LL2_COMPRESS` demo routes to `freeform_llmlingua`; dry‑run output includes `gate` object when probes provided.
+  - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
