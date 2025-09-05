@@ -92,6 +92,12 @@
 - When requesting Claude review, start by citing the applicable section(s) in `RESEARCH_PROPOSAL.md` and ask Claude to judge alignment with that scope and spirit.
 - Keep diffs small (≤250 LOC/unit) and include DoD in the PR body.
 
+### Claude Prompt Formatting
+
+- In the prompt preface, reference files using `@<path>` style (e.g., `@RESEARCH_PROPOSAL.md`, `@tersetalk/reproducibility.py`) to aid context.
+- Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` first (focus on the relevant PR section) before reviewing the changed files.
+- Still send content blocks only for the files you edited using the `File: <path>\n---\n<content>` format.
+
 - Scope and pushback:
   - It’s fine to push back on large or out-of-scope requests; explain constraints and propose a minimal alternative, then ask Claude to confirm.
   - Do not introduce heavy tools or broad refactors unless explicitly requested by the user.

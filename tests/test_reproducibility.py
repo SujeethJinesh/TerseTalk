@@ -6,6 +6,7 @@ from tersetalk.reproducibility import (
   snapshot_prng_state,
   fingerprint_snapshot,
 )
+import pytest
 
 
 def test_api_returns_defaults():
@@ -48,3 +49,10 @@ def test_snapshot_keys_present():
   assert "numpy" in snap  # value may be None
   assert "torch" in snap  # value may be None
 
+
+def test_invalid_seed_raises():
+  with pytest.raises(ValueError):
+    set_global_seed(-1)
+  # type: ignore[arg-type]
+  with pytest.raises(ValueError):
+    set_global_seed("abc")  # pyright: ignore[reportArgumentType]
