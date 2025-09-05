@@ -25,10 +25,10 @@ def test_oldest_by_last_access_eviction():
   mem = MemoryStore()
   mem.MAX_ENTRIES = 2  # shrink capacity for test
   a = mem.put("A")  # oldest access initially
-  time.sleep(0.002)
+  time.sleep(0.01)
   b = mem.put("B")
   _ = mem.get(a)  # touch A so B becomes oldest by last-access
-  time.sleep(0.002)
+  time.sleep(0.01)
   c = mem.put("C")  # should evict B (oldest by last access)
   assert mem.get(b) is None
   assert mem.get(a) == "A"
@@ -74,4 +74,3 @@ def test_validator_integration_with_real_memory():
   mstats = mem.stats()
   assert mstats["entries"] >= 2
   assert "density" in stats and 0.0 <= stats["density"] <= 1.0
-
