@@ -42,6 +42,23 @@
 
 - Prefer minimal, focused diffs; follow existing patterns. If you add tooling, include Make targets and update `README.md` and this guide as needed.
 
+## Research Alignment (with RESEARCH_PROPOSAL.md)
+
+- North Star: Implement and evaluate the TerseTalk-JSONL protocol (v0.5) and a scoped topology extension (v1.0). Keep every implementation unit ≤250 LOC with clear before→after, public APIs, tests, and a Definition of Done (DoD).
+- Code placement: implement new modules under `src/tersetalk/` mirroring the proposal’s layout (protocol_jsonl.py, memory.py, model_io.py, star_runner.py, baselines.py, datasets.py, metrics.py, logging_utils.py). Mirror paths in `tests/`.
+- PR discipline:
+  - ≤250 LOC per PR where feasible; tightly scoped.
+  - Include: context, before→after, public APIs, tests, DoD checklist.
+  - Avoid heavy frameworks; stick to proposal’s minimal deps.
+- Dependencies:
+  - Minimal now: `pytest`, `pytest-timeout`, `ruff`, `black`. Research tasks may also need `datasets` and `llmlingua==0.2.1` per v0.5.
+  - Optional (auto-disabled if missing): `bert-score` + `torch`, `tiktoken`. Add guards so absence downgrades to fallback metrics (e.g., Jaccard, len/4 tokens).
+- Evaluation targets (v0.5):
+  - Datasets: HotpotQA and GSM8K subsets.
+  - Comparisons: TerseTalk-JSONL, Free-form, Free-form + LLMLingua/‑2.
+  - Metrics: Quality vs Tokens (Pareto), semantic preservation (BERTScore optional), (de)serialization latency, overflow/memory stats.
+- Process: prefer a single CLI runner and CSV outputs; keep UX simple and reproducible; make each unit runnable independently.
+
 ## Claude Code Review Protocol
 
 - Preconditions:
@@ -67,6 +84,7 @@
   - Re-run `make fmt && make lint && make test`.
   - Re-run the review with a short “Re-review after applying your suggestions” preface.
   - Stop when Claude replies exactly: `Approved: no nits.` (case-sensitive, must match exactly)
+  - For research features, ask Claude to explicitly confirm alignment with RESEARCH_PROPOSAL.md (PR scope, metrics, minimal deps, and DoD).
 
 - Scope and pushback:
   - It’s fine to push back on large or out-of-scope requests; explain constraints and propose a minimal alternative, then ask Claude to confirm.
@@ -85,6 +103,16 @@
   - Ensure `ANTHROPIC_API_KEY` is exported and valid.
 - Permission prompts in sandbox:
   - Use `--dangerously-skip-permissions` as this environment is sandboxed.
+
+## Environment (Python 3.12 + venv)
+
+- This project targets Python 3.12. Ensure it’s installed (macOS/Homebrew):
+  - `brew install python@3.12`
+  - Optionally add: `export PATH="/usr/local/opt/python@3.12/bin:$PATH"`
+- Create venv and install dev tools:
+  - `make setup` (auto-detects Python 3.12; falls back to `python3` if unavailable)
+- Validate:
+  - `make fmt && make lint && make test`
 
 THE MAKE IT WORK FIRST FIELD GUIDE
 
