@@ -67,6 +67,13 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
 
 - Always assume a local `.venv` is used (`source .venv/bin/activate`). Prefer commands that respect the active venv.
 
+### For PR-01 — Repository Scaffold & CLI Skeleton
+
+- Validate that `make install` installs runtime + dev deps (requirements.txt + requirements-dev.txt).
+- Confirm `scripts/run_v05.py` prints `--help`, `--version`, and that `--dry-run` returns a JSON config including `defaults` from `set_global_seed`.
+- Ensure PR‑00 files and tests remain intact and passing.
+- Confirm runtime deps minimality (click, tqdm); no heavy tooling added.
+
 ## Notes
 
 - The .gitignore is configured for Python projects with comprehensive exclusions for common Python artifacts
