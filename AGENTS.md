@@ -63,28 +63,41 @@
 
 - Preconditions:
   - Ensure local checks pass: `make fmt && make lint && make test`.
+  - For PR-00 specifically, run `make install && make test && make smoke` and include smoke JSON + pytest summary in the PR.
   - Claude CLI must work with Node LTS (>=18). On macOS with Homebrew:
     - `brew install node@20` and add `export PATH="/usr/local/opt/node@20/bin:$PATH"`.
   - Export `ANTHROPIC_API_KEY` in your shell.
   - Quick sanity check: `echo "pong" | claude -p --dangerously-skip-permissions --model opus` ⇒ outputs `pong`.
 
-- Prompt template (pipe only the files you touched):
+- Prompt template (reference-only; do not paste file contents):
   - Start with a 1–2 sentence goal and explicit ask for a verdict.
-  - Include focus areas relevant to the change.
-  - For each file, send as:
-    - `File: path/to/file\n---\n<file contents>`
+  - Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` (relevant PR section) first.
+  - List edited files using `@` references only (e.g., `@tersetalk/reproducibility.py`, `@tests/test_reproducibility.py`).
   - End with: `If fully acceptable with no nits, explicitly reply: 'Approved: no nits.'`
 
 - Recommended command shape:
-  - `( printf "<context + ask>\n\n"; printf "File: X\n---\n"; sed -n '1,200p' X; ... ) | claude -p --dangerously-skip-permissions --model opus` (the `sed -n '1,200p'` prints the first 200 lines)
+  - `( printf "<context + ask with @file refs only>\n" ) | claude -p --dangerously-skip-permissions --model opus`
 
-- Iteration loop:
-  - Capture Claude’s feedback verbatim in your task response.
-  - Apply only changes that meet the intent and keep diffs minimal.
-  - Re-run `make fmt && make lint && make test`.
-  - Re-run the review with a short “Re-review after applying your suggestions” preface.
-  - Stop when Claude replies exactly: `Approved: no nits.` (case-sensitive, must match exactly)
-  - For research features, ask Claude to explicitly confirm alignment with RESEARCH_PROPOSAL.md (PR scope, metrics, minimal deps, and DoD).
+- Iteration loop (multi-round, required):
+  - Self-review first: ensure changes compile, tests pass, and scope aligns with the proposal. Keep diffs minimal.
+  - Request Claude review using @file references only; instruct Claude to read `@RESEARCH_PROPOSAL.md` first.
+  - If Claude has comments: evaluate necessity. Implement minimal changes or respond with rationale for declining.
+  - After any changes: re-run `make test` (and `make smoke` when applicable).
+  - Re-run Claude review with a brief “Re-review after applying suggestions” note.
+  - Repeat until Claude replies exactly: `Approved: no nits.` and confirms proposal alignment.
+  - Perform a final self-review: confirm all tests pass and code quality meets your standard before requesting human review.
+  - For research features, ask Claude to explicitly confirm alignment with `RESEARCH_PROPOSAL.md` (PR scope, metrics, minimal deps, and DoD). Always reference the relevant proposal section in your prompt.
+
+### Always reference RESEARCH_PROPOSAL.md
+
+- When requesting Claude review, start by citing the applicable section(s) in `RESEARCH_PROPOSAL.md` and ask Claude to judge alignment with that scope and spirit.
+- Keep diffs small (≤250 LOC/unit) and include DoD in the PR body.
+
+### Claude Prompt Formatting
+
+- In the prompt preface, reference files using `@<path>` style (e.g., `@RESEARCH_PROPOSAL.md`, `@tersetalk/reproducibility.py`) to aid context.
+- Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` first (focus on the relevant PR section) before reviewing the changed files.
+- Still send content blocks only for the files you edited using the `File: <path>\n---\n<content>` format.
 
 - Scope and pushback:
   - It’s fine to push back on large or out-of-scope requests; explain constraints and propose a minimal alternative, then ask Claude to confirm.
@@ -92,8 +105,8 @@
 
 - Hygiene:
   - Never pipe secrets or `.env` contents to Claude.
-  - Send only the specific files you edited; avoid dumping unrelated large files.
-  - Keep each file excerpt <=200 lines where possible; trim to relevant hunks if larger.
+  - Reference only the specific files you edited with `@path` (no file bodies).
+  - It's expected that Claude fetches referenced files; avoid pasting long excerpts.
 
 ## Troubleshooting Claude CLI
 
@@ -113,6 +126,17 @@
   - `make setup` (auto-detects Python 3.12; falls back to `python3` if unavailable)
 - Validate:
   - `make fmt && make lint && make test`
+
+Always use the local `.venv` when running any commands. Activate with `source .venv/bin/activate` before `make` if the Makefile does not manage activation for you.
+
+## PR Summaries (Running Log)
+
+Record a brief summary after each PR is merged to accelerate context-loading in new sessions. Include acceptance evidence and next steps.
+
+- PR-00 — Reproducibility Infrastructure:
+  - Summary: Adds `tersetalk/reproducibility.py` with `set_global_seed`, fingerprint helpers, tests, and a smoke script. Optional NumPy/Torch guarded.
+  - Evidence: pytest passed locally (7 passed); smoke JSON: `same_seed_equal: true`, `diff_seed_unequal: true`. Full JSON and pytest summary included in PR body.
+  - Next: Proceed to PR-01 per `RESEARCH_PROPOSAL.md`.
 
 THE MAKE IT WORK FIRST FIELD GUIDE
 

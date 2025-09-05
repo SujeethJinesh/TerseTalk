@@ -1,22 +1,19 @@
-[tool.black]
-line-length = 100
-target-version = ["py312"]
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-
-[tool.ruff.lint]
-select = [
-  "E",  # pycodestyle errors
-  "F",  # pyflakes
-  "I",  # isort
-]
-ignore = []
-
-[tool.ruff.lint.isort]
-known-first-party = ["src"]
+[project]
+name = "tersetalk"
+version = "0.0.1"
+description = "TerseTalk reproducibility infrastructure (PR-00)"
+requires-python = ">=3.10"
+dependencies = []
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tersetalk*"]
+exclude = ["src*"]
