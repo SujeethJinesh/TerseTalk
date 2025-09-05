@@ -153,6 +153,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; Echo demo JSON shows `compliance_ok: true`, canonical `lines_jsonl`, and validator stats. Runtime deps pinned to: pydantic==2.11.7, instructor==1.11.2, openai==1.106.1.
   - Next: Proceed to PR-03 MemoryStore per `RESEARCH_PROPOSAL.md`.
 
+- PR-03 — Memory Store:
+  - Summary: Adds `tersetalk/memory.py` with bounded `MemoryStore` (MAX_ENTRIES=10_000), oldest-by-last-access eviction, deterministic M# id minting, and `put/get/reset/stats`. Includes `scripts/memory_smoke.py` and tests validating eviction, id pattern, reset, stats, and validator integration.
+  - Evidence: pytest all green; smoke shows minted_ids, fetched echo mapping, and validator run with `o_refs_retrievable: true` plus non-zero overflow stats and density ∈ [0,1].
+  - Next: Proceed to PR-04 Summarizer per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH

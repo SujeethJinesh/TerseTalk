@@ -73,7 +73,9 @@ class JSONLValidator:
     merged = dict(default_caps)
     merged.update(self.caps or {})
     self.caps = merged
-    self.memory = self.memory or _LocalMemory()
+    # Do not rely on truthiness; MemoryStore defines __len__ and may be empty.
+    if self.memory is None:
+      self.memory = _LocalMemory()
     self.overflow_freq: Dict[str, int] = {}
 
   # ---------- Detection ----------
@@ -265,4 +267,3 @@ class JSONLValidator:
   # ---------- Public utility ----------
   def estimate_tokens(self, text: str) -> int:  # pragma: no cover - trivial
     return _token_estimate(text)
-
