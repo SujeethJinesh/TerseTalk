@@ -8,4 +8,5 @@ __all__ = [
   "memory",
   "summarization",
   "hybrid_gate",
+  "noninferiority",
 ]

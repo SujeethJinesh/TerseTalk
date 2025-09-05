@@ -1,465 +1,297 @@
-Read through your AGENTS.md and ensure you follow that precisely. Make sure you fully understand and have read through the updated RESEARCH_PROPOSAL.md. First verify, which branch we're on and return to the main branch if we're not there. Ensure you pull the latest main branch before branching off for the rest of the PR. I want you to implement a PR of the RESEARCH_PROPOSAL.md on a new branch and create a PR for it with a very good review using yourself, claude code, and yourself again of course as mentioned in the AGENTS.md. Ensure you're aligned with the spirit of the proposal. Then send a PR out so I can review it after your implementation is pushed up. If you run into any major roadblocks, let me know and be detailed. Also update your AGENTS.md and CLAUDE.md to ensure that when you are asking for a review from CLAUDE, to refer to the RESEARCH_PROPOSAL.md and ensure you review it in the spirit of that as well. It's imperative that we always keep the RESEARCH_PROPOSAL.md up to date. You must provide a very small summary of the results after the PR was checked in (update AGENTS.md and ask CLAUDE.md to review that as well every PR). This way when a new session starts, it is easy to get back up to speed on the latest work that needs to be done. Please also ensure you use the .venv created at all times. Ensure that if you are debugging failures or such and need to create additional scripts, that you clean them up afterwards. It's incredibly important that you keep the code clean and minimal. We want it to do the job correctly. Before you merge the PR, you must wait for my approval. Also at the end I want you to outline any risks we are seeing in this project, are our expectations aligned with how the progress is going? Will our project succeed and achieve the baselines we expect using your best judgement? Here are more detailed instructions for PR implementation.
+Read through your AGENTS.md and ensure you follow that precisely. Make sure you fully understand and have read through the updated RESEARCH_PROPOSAL.md. First verify, which branch we're on and return to the main branch if we're not there. Ensure you pull the latest main branch before branching off for the rest of the PR. I want you to implement a PR of the RESEARCH_PROPOSAL.md on a new branch and create a PR for it with a very good review using yourself, claude code, and yourself again of course as mentioned in the AGENTS.md. Ensure you're aligned with the spirit of the proposal. Then send a PR out so I can review it after your implementation is pushed up. If you run into any major roadblocks, let me know and be detailed. Also update your AGENTS.md and CLAUDE.md to ensure that when you are asking for a review from CLAUDE, to refer to the RESEARCH_PROPOSAL.md and ensure you review it in the spirit of that as well. It's imperative that we always keep the RESEARCH_PROPOSAL.md up to date. You must provide a very small summary of the results after the PR was checked in (update AGENTS.md and ask CLAUDE.md to review that as well every PR). This way when a new session starts, it is easy to get back up to speed on the latest work that needs to be done. Please also ensure you use the .venv created at all times. Ensure that if you are debugging failures or such and need to create additional scripts, that you clean them up afterwards. It's incredibly important that you keep the code clean and minimal. We want it to do the job correctly. Before you merge the PR, you must wait for my approval. Also at the end I want you to outline any risks we are seeing in this project, are our expectations aligned with how the progress is going? Will our project succeed and achieve the baselines we expect using your best judgement? Absolutely make sure you're reporting results truthfully and honestly. Avoid fake, mocked, or other non genuine results. We should be aiming to properly fix things and run proper evaluations. Here are more detailed instructions for PR implementation.
 
 ### PR Summary
 
-PR‑H2 — calibrate_caps.py + library
+PR‑H3 — noninferiority.py + smoke CLI
 
-Role: You are a senior engineer implementing PR‑H2 right after PR‑H1.
-Goal (from spec): Sweep {caps, summarizer, deref_policy, gate_on/off, token_budget} on a 50‑example shard; select the best combo; write it to configs/calibration.yaml.
-Constraints:
+Role: You are a senior engineer implementing PR‑H3 immediately after PR‑H2 merged.
 
-Offline, stdlib‑only (llmlingua optional but not required).
+Goal (from spec):
+Provide a simple analysis helper that, given per‑example correctness arrays for Hybrid and LLMLingua, runs a one‑sided non‑inferiority test with margin δ (default 0.02) and confidence 95% using a paired bootstrap over example indices. Return a decision flag and CI bounds. Ship a small CLI and tests.
+
+Decision rule (one‑sided NI):
+Let d = acc(Hybrid) − acc(LLML). We claim non‑inferiority if the 95% lower bound of d is greater than −δ. (Null: d ≤ −δ; Reject null if LB₀.₉₅(d) > −δ.)
+
+Constraints & expectations
+
+Stdlib only (no numpy/scipy).
 
 Deterministic given the same seed and inputs.
 
-Do not implement deref behavior yet—only treat deref_policy as a recorded parameter.
+Paired bootstrap over example indices (resample N indices with replacement).
 
-Keep prior PR tests green.
+Fast enough for tests: default n_boot=1000, tests may use n_boot=400.
 
-What “best” means (explicit policy for this PR):
-We minimize avg_est_tokens (estimated outgoing tokens per example) subject to avg_density ≥ density_min (default 0.75). If no candidate meets the threshold, choose the one with highest avg_density, breaking ties by lower avg_est_tokens.
+Input validation: same length, non‑empty, values in {0,1} / {False,True}.
 
-Scoring per example (offline & cheap):
+Provide both one‑sided LB (95%) and a two‑sided 95% CI for visibility (percentiles 2.5%/97.5%).
 
-Build a Manager JSONL (synthetic) → validate & overflow with the selected caps and summarizer.
-
-Convert validated JSONL to a free‑form probe via jsonl_to_prose.
-
-If gate_on=True, run the Hybrid Gate (PR‑H1) with token_budget on the validated JSONL vs the free‑form probe.
-
-If route = "tersetalk" → tokens = estimate_tokens(validated_jsonl).
-
-If route = "freeform_llmlingua" → tokens = returned "ll2" projection (if any); (by gate design this only happens when it fits budget).
-
-Record density from validator stats, plus routed path.
-
-Aggregate across examples: avg_est_tokens, avg_density, routed_freeform_frac, avg_overflow_rate.
+Keep previous tests green.
 
 Deliverables
 
-tersetalk/calibration.py — library with the sweep + selection logic (deterministic).
+tersetalk/noninferiority.py — library with the bootstrap and NI decision.
 
-scripts/calibrate_caps.py — CLI wrapper that prints a compact JSON report and writes configs/calibration.yaml (JSON is valid YAML).
+scripts/noninferiority_smoke.py — CLI to generate synthetic outcomes or (optionally) read two JSON arrays and print the NI report.
 
-Tests: tests/test_calibration.py ensuring determinism, schema correctness, and gate‑aware behavior (using gate’s FAKE env override).
+tests/test_noninferiority.py — deterministic, offline tests on synthetic data.
 
-Add configs/ to .gitignore.
+Update tersetalk/**init**.py to export noninferiority.
 
 Create/Update the following files exactly
 
-1. Update .gitignore (append at the end)
-
-# Calibration outputs
-
-configs/
-
-2. tersetalk/calibration.py (new)
+1. tersetalk/noninferiority.py (new)
    from **future** import annotations
 
 import json
-import math
 import random
-import string
 from dataclasses import dataclass, asdict
-from pathlib import Path
-from typing import Dict, Iterable, List, Literal, Optional, Tuple
+from typing import Iterable, List, Tuple, Dict
 
-from tersetalk.reproducibility import set_global_seed
-from tersetalk.protocol_jsonl import JSONLValidator
-from tersetalk.summarization import Summarizer
-from tersetalk.memory import MemoryStore
-from tersetalk.hybrid_gate import GateCfg, gate_choose_protocol, estimate_tokens
+def \_to01(x) -> int:
+if isinstance(x, bool):
+return 1 if x else 0
+if isinstance(x, (int,)):
+if x in (0, 1):
+return int(x)
+raise ValueError("Outcomes must be 0/1 or bool.")
 
-# --------------------------
+def \_validate_inputs(hybrid: Iterable, lingua: Iterable) -> Tuple[List[int], List[int]]:
+h = [ _to01(v) for v in list(hybrid) ]
+l = [ _to01(v) for v in list(lingua) ]
+if len(h) == 0 or len(l) == 0 or len(h) != len(l):
+raise ValueError("Hybrid and LLMLingua arrays must be non-empty and equal-length.")
+return h, l
 
-# Synthetic shard generator
+def \_acc(arr: List[int]) -> float:
+return sum(arr) / len(arr) if arr else 0.0
 
-# --------------------------
+def \_acc_subset(arr: List[int], idxs: List[int]) -> float:
+if not idxs:
+return 0.0
+s = 0
+for i in idxs:
+s += arr[i]
+return s / len(idxs)
 
-\_LOREM = (
-"alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
-"omicron pi rho sigma tau upsilon phi chi psi omega"
-).split()
-
-def _rand_words(rng: random.Random, lo: int, hi: int) -> str:
-n = rng.randint(lo, hi)
-return " ".join(rng.choice(\_LOREM) for _ in range(n)).strip()
-
-def \_synth_example(rng: random.Random, idx: int) -> Dict:
+def \_percentile(sorted_vals: List[float], q: float) -> float:
 """
-Produce a single synthetic Manager task with variability to trigger overflow.
-Deterministic for a fixed RNG state.
+Simple percentile on a sorted list; q in [0,1]. Linear interpolation.
 """
-goal = f"Compare entities and return the earlier or smaller value (case {idx})." # Alternate between date-like and description-like facts
-if idx % 3 == 0:
-f1 = f"Item A: 200{rng.randint(0,9)}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}"
-f2 = f"Item B: 199{rng.randint(0,9)}-{rng.randint(1,12):02d}-{rng.randint(1,28):02d}"
-else: # Longish facts to force caps
-f1 = \_rand_words(rng, 12, 28)
-f2 = \_rand_words(rng, 6, 18)
-
-    # Optional third fact to vary density
-    facts = [f1, f2]
-    if idx % 4 == 0:
-        facts.append(_rand_words(rng, 10, 20))
-
-    question = "Which is earlier or smaller? Provide only the answer."
-    # Compose JSONL (lenient mix to exercise normalizer)
-    lines: List[str] = [
-        '["r","M"]',
-        json.dumps(["g", goal]),
-    ]
-    for f in facts:
-        # mix array/object forms
-        if rng.random() < 0.5:
-            lines.append(json.dumps(["f", f]))
-        else:
-            lines.append(json.dumps({"f": f}))
-    # occasional assumptions/plans to change tag mix
-    if rng.random() < 0.5:
-        lines.append(json.dumps(["u", "Use ISO dates if dates are present."]))
-    if rng.random() < 0.4:
-        lines.append(json.dumps(["p", "Compare A and B; output one token."]))
-    lines.append(json.dumps(["q", "W", question]))
-    return {"jsonl": "\n".join(lines)}
-
-def synth_shard(n: int, seed: int) -> List[Dict]:
-rng = random.Random(seed)
-return [_synth_example(rng, i) for i in range(n)]
-
-# --------------------------
-
-# Grid + scoring
-
-# --------------------------
-
-Caps = Dict[str, int]
-SummMethod = Literal["extractive", "llmlingua"]
-DerefPolicy = Literal["never", "conditional", "always"] # placeholder for PR-H4
-
-def default_caps_grid() -> List[Caps]:
-return [
-{"f": 20, "p": 15, "q": 20, "g": 30, "u": 20, "t": 50}, # aggressive
-{"f": 30, "p": 20, "q": 30, "g": 30, "u": 20, "t": 50}, # baseline
-{"f": 50, "p": 40, "q": 50, "g": 40, "u": 25, "t": 60}, # relaxed
-{"f": 100, "p": 80, "q": 100, "g": 60, "u": 30, "t": 80}, # very relaxed
-]
-
-@dataclass(frozen=True)
-class CalibSpec:
-caps: Caps
-summarizer: SummMethod
-deref_policy: DerefPolicy
-gate_enabled: bool
-token_budget: int
+if not sorted_vals:
+return 0.0
+n = len(sorted_vals)
+if n == 1:
+return sorted_vals[0]
+pos = q _ (n - 1)
+lo = int(pos)
+hi = min(lo + 1, n - 1)
+frac = pos - lo
+return sorted_vals[lo] _ (1 - frac) + sorted_vals[hi] \* frac
 
 @dataclass
-class CalibMetrics:
-avg_est_tokens: float
-avg_density: float
-avg_overflow_rate: float
-routed_freeform_frac: float
+class NIReport:
 n: int
+alpha: float
+delta: float
+acc_hybrid: float
+acc_llml: float
+diff: float
+lb_one_sided_95: float
+ci2_lower_95: float
+ci2_upper_95: float
+method: str
+n_boot: int
+seed: int
+noninferior: bool
 
-@dataclass
-class CalibEval:
-spec: CalibSpec
-metrics: CalibMetrics
+    def to_dict(self) -> Dict:
+        d = asdict(self)
+        d["decision"] = "non-inferior" if self.noninferior else "fail-to-demonstrate"
+        return d
 
-def evaluate_spec_on_shard(shard: List[Dict], spec: CalibSpec, seed: int) -> CalibEval:
+def paired_bootstrap_diff(
+hybrid: Iterable,
+lingua: Iterable,
+n_boot: int = 1000,
+alpha: float = 0.05,
+seed: int = 0
+) -> NIReport:
 """
-Evaluate one calibration spec on a synthetic shard.
-Deterministic for fixed (shard, spec, seed).
-""" # Ensure deterministic behavior of any randomness in summarizer/validator code paths.
-set_global_seed(seed)
+Paired bootstrap of the accuracy difference d = acc(H) - acc(L).
+Returns an NIReport with two-sided 95% CI and the one-sided 95% lower bound.
+"""
+h, l = \_validate_inputs(hybrid, lingua)
+n = len(h)
+rng = random.Random(seed)
 
-    summarizer = Summarizer(method=spec.summarizer)
+    base_h = _acc(h)
+    base_l = _acc(l)
+    base_d = base_h - base_l
 
-    densities: List[float] = []
-    token_estimates: List[int] = []
-    overflow_rates: List[float] = []
-    routed_freeform = 0
-    gate_cfg = GateCfg(token_budget=spec.token_budget)
+    diffs: List[float] = []
+    idxs = list(range(n))
+    for _ in range(max(1, n_boot)):
+        # resample paired indices with replacement
+        sample = [ idxs[rng.randrange(n)] for _ in range(n) ]
+        dh = _acc_subset(h, sample)
+        dl = _acc_subset(l, sample)
+        diffs.append(dh - dl)
 
-    for ex in shard:
-        memory = MemoryStore()
-        validator = JSONLValidator(caps=spec.caps, memory=memory, summarizer=summarizer)
+    diffs.sort()
+    # two-sided 95% CI (2.5%, 97.5%)
+    ci2_lo = _percentile(diffs, 0.025)
+    ci2_hi = _percentile(diffs, 0.975)
+    # one-sided lower 95% bound (5%)
+    lb = _percentile(diffs, alpha)
 
-        # Normalize/overflow with the selected caps/summarizer
-        validated_jsonl, stats = validator.validate_and_overflow(ex["jsonl"])
-
-        # Free-form probe
-        freeform = validator.jsonl_to_prose(validated_jsonl)
-
-        # Gate decision
-        if spec.gate_enabled:
-            decision = gate_choose_protocol(validated_jsonl, freeform, gate_cfg)
-            route = decision["route"]
-            if route == "freeform_llmlingua":
-                routed_freeform += 1
-                ll2 = decision["est_tokens"].get("ll2")
-                # ll2 must exist for the route to be freeform in our gate logic
-                token_estimates.append(int(ll2))
-            else:
-                token_estimates.append(estimate_tokens(validated_jsonl))
-        else:
-            # No gate: always TerseTalk tokens post-validation
-            token_estimates.append(estimate_tokens(validated_jsonl))
-
-        densities.append(float(stats["density"]))
-        of_count = stats["overflow"]["count"]
-        total_lines = max(1, stats["lines_total"])
-        overflow_rates.append(of_count / total_lines)
-
-        # Reset memory between tasks (explicitly, though validator has no shared state)
-        memory.reset()
-
-    n = len(shard)
-    metrics = CalibMetrics(
-        avg_est_tokens=sum(token_estimates) / n if n else 0.0,
-        avg_density=sum(densities) / n if n else 0.0,
-        avg_overflow_rate=sum(overflow_rates) / n if n else 0.0,
-        routed_freeform_frac=(routed_freeform / n) if n else 0.0,
+    return NIReport(
         n=n,
+        alpha=alpha,
+        delta=0.02,              # default margin; caller may override in decision step
+        acc_hybrid=base_h,
+        acc_llml=base_l,
+        diff=base_d,
+        lb_one_sided_95=lb,
+        ci2_lower_95=ci2_lo,
+        ci2_upper_95=ci2_hi,
+        method="paired-bootstrap",
+        n_boot=n_boot,
+        seed=seed,
+        noninferior=False,       # filled by noninferiority_test
     )
-    return CalibEval(spec=spec, metrics=metrics)
 
-def sweep_grid(
-n: int,
-seed: int,
-caps_grid: List[Caps],
-summarizers: List[SummMethod],
-deref_policies: List[DerefPolicy],
-gate_modes: List[bool],
-token_budgets: List[int],
-density_min: float = 0.75,
+def noninferiority_test(
+hybrid: Iterable,
+lingua: Iterable,
+delta: float = 0.02,
+alpha: float = 0.05,
+n_boot: int = 1000,
+seed: int = 0
 ) -> Dict:
 """
-Run a full sweep over the grid and return a deterministic report dict:
-{
-"n": int, "seed": int, "density_min": float,
-"grid_evaluations": [ { "spec": {...}, "metrics": {...} }, ... ],
-"best": { "spec": {...}, "metrics": {...} }
-}
+One-sided non-inferiority: H0: d <= -delta; HA: d > -delta.
+We declare non-inferiority if lb_one_sided_95(d) > -delta.
+Returns a JSON-serializable dict (NIReport + decision).
 """
-shard = synth_shard(n=n, seed=seed)
-evals: List[CalibEval] = []
+rep = paired_bootstrap_diff(hybrid, lingua, n_boot=n_boot, alpha=alpha, seed=seed)
+decision = rep.lb_one_sided_95 > (-delta)
+rep.delta = float(delta)
+rep.noninferior = bool(decision)
+return rep.to_dict()
 
-    # Deterministic iteration order
-    for caps in caps_grid:
-        for sm in summarizers:
-            for dp in deref_policies:
-                for gate_on in gate_modes:
-                    for budget in token_budgets:
-                        spec = CalibSpec(
-                            caps=caps,
-                            summarizer=sm,
-                            deref_policy=dp,
-                            gate_enabled=gate_on,
-                            token_budget=int(budget),
-                        )
-                        ev = evaluate_spec_on_shard(shard, spec, seed=seed)
-                        evals.append(ev)
-
-    # Selection: filter by density_min; pick lowest avg_est_tokens
-    def _rank_key(ev: CalibEval) -> Tuple[float, float, float]:
-        # Lower tokens better; higher density better; lower freeform frac better (tie-breaker)
-        return (ev.metrics.avg_est_tokens, -ev.metrics.avg_density, ev.metrics.routed_freeform_frac)
-
-    feasible = [ev for ev in evals if ev.metrics.avg_density >= density_min]
-    chosen: CalibEval
-    if feasible:
-        feasible.sort(key=_rank_key)
-        chosen = feasible[0]
-    else:
-        # No candidate meets density; pick by highest density then lowest tokens
-        evals.sort(key=lambda ev: (-ev.metrics.avg_density, ev.metrics.avg_est_tokens))
-        chosen = evals[0]
-
-    # Deterministic JSON-like report (JSON is valid YAML)
-    def _ev_to_dict(ev: CalibEval) -> Dict:
-        return {"spec": asdict(ev.spec), "metrics": asdict(ev.metrics)}
-
-    report = {
-        "n": n,
-        "seed": seed,
-        "density_min": density_min,
-        "grid_evaluations": [_ev_to_dict(ev) for ev in evals],
-        "best": _ev_to_dict(chosen),
-    }
-    return report
-
-def save_calibration_yaml(report: Dict, out_path: str | Path) -> Path:
-"""
-Write the report as JSON (which is valid YAML 1.2) to out_path.
-Returns the Path. Deterministic content (no timestamps).
-"""
-p = Path(out_path)
-p.parent.mkdir(parents=True, exist_ok=True) # JSON subset of YAML => valid .yaml
-text = json.dumps(report, indent=2, sort_keys=True)
-p.write_text(text, encoding="utf-8")
-return p
-
-3. scripts/calibrate_caps.py (new)
+2. scripts/noninferiority_smoke.py (new)
    from **future** import annotations
 
 import argparse
 import json
 import sys
+import random
 from typing import List
 
-from tersetalk.calibration import (
-default_caps_grid,
-sweep_grid,
-save_calibration_yaml,
-)
+from tersetalk.noninferiority import noninferiority_test
 
-def \_parse_caps_grid(s: str) -> List[dict]:
-try:
-val = json.loads(s)
-if isinstance(val, list) and all(isinstance(x, dict) for x in val):
-return val
-except Exception:
-pass
-raise SystemExit("Error: --caps-grid must be a JSON list of objects, e.g. "
-"'[{\"f\":20,\"p\":15,\"q\":20},{\"f\":30,\"p\":20,\"q\":30}]'")
-
-def \_csv_list(s: str) -> List[str]:
-return [x.strip() for x in s.split(",") if x.strip()]
-
-def \_csv_ints(s: str) -> List[int]:
-try:
-return [int(x) for x in _csv_list(s)]
-except Exception as e:
-raise SystemExit(f"Error parsing integer list: {e}") from e
+def _gen_bernoulli(n: int, p: float, seed: int) -> List[int]:
+rng = random.Random(seed)
+return [1 if rng.random() < p else 0 for _ in range(n)]
 
 def main():
-ap = argparse.ArgumentParser(description="PR-H2: Calibration sweep for caps/summarizer/gate")
-ap.add_argument("--n", type=int, default=50, help="Number of synthetic examples")
-ap.add_argument("--seed", type=int, default=0, help="Random seed for determinism")
-ap.add_argument("--out", type=str, default="configs/calibration.yaml", help="Output YAML path")
-ap.add_argument("--density-min", type=float, default=0.75, help="Min avg density required")
-ap.add_argument("--caps-grid", type=str, default="", help="JSON list of caps dicts (overrides defaults)")
-ap.add_argument("--summarizers", type=str, default="extractive", help="Comma list among {extractive,llmlingua}")
-ap.add_argument("--deref-policies", type=str, default="never,conditional,always", help="Comma list (placeholder)")
-ap.add_argument("--gate-modes", type=str, default="off,on", help="Comma list among {off,on}")
-ap.add_argument("--token-budgets", type=str, default="400,600,800", help="Comma list of integers")
+ap = argparse.ArgumentParser(description="PR-H3: One-sided non-inferiority smoke")
+ap.add_argument("--n", type=int, default=500, help="Number of examples")
+ap.add_argument("--p-hybrid", type=float, default=0.79, help="Hybrid accuracy (synthetic)")
+ap.add_argument("--p-ll", type=float, default=0.78, help="LLMLingua accuracy (synthetic)")
+ap.add_argument("--delta", type=float, default=0.02, help="Non-inferiority margin (absolute)")
+ap.add_argument("--alpha", type=float, default=0.05, help="One-sided alpha")
+ap.add_argument("--seed", type=int, default=0, help="Random seed")
+ap.add_argument("--n-boot", type=int, default=800, help="Bootstrap replicates")
+ap.add_argument("--from-json", type=str, default="", help="Path to JSON file with {'hybrid':[0/1...],'ll':[0/1...]}")
 args = ap.parse_args()
 
-    caps_grid = _parse_caps_grid(args.caps_grid) if args.caps_grid else default_caps_grid()
-    summarizers = _csv_list(args.summarizers)
-    deref_pols = _csv_list(args.deref_policies)
-    gate_modes = [g.lower() in ("on", "true", "1", "yes") for g in _csv_list(args.gate_modes)]
-    budgets = _csv_ints(args.token_budgets)
+    if args.from_json:
+        with open(args.from_json, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        hybrid = payload["hybrid"]
+        ll = payload["ll"]
+    else:
+        # Deterministic paired generation: use different seeds to introduce slight correlation if desired
+        hybrid = _gen_bernoulli(args.n, args.p_hybrid, args.seed)
+        ll = _gen_bernoulli(args.n, args.p_ll, args.seed + 1)
 
-    report = sweep_grid(
-        n=int(args.n),
-        seed=int(args.seed),
-        caps_grid=caps_grid,
-        summarizers=summarizers,              # type: ignore[arg-type]
-        deref_policies=deref_pols,            # type: ignore[arg-type]
-        gate_modes=gate_modes,
-        token_budgets=budgets,
-        density_min=float(args.density_min),
+    report = noninferiority_test(
+        hybrid, ll, delta=args.delta, alpha=args.alpha, n_boot=args.n_boot, seed=args.seed
     )
-    out_path = save_calibration_yaml(report, args.out)
-
-    # Also print a compact JSON summary to stdout (helpful for CI)
-    best = report["best"]
-    summary = {
-        "out_path": str(out_path),
-        "n": report["n"],
-        "seed": report["seed"],
-        "density_min": report["density_min"],
-        "best_spec": best["spec"],
-        "best_metrics": best["metrics"],
-    }
-    print(json.dumps(summary, indent=2))
+    print(json.dumps(report, indent=2))
 
 if **name** == "**main**":
 main()
 
-4. tests/test_calibration.py (new)
+3. tests/test_noninferiority.py (new)
    from **future** import annotations
 
 import json
-import os
-import subprocess
-import sys
-from pathlib import Path
-from typing import Tuple
+import random
 
-ROOT = Path(**file**).resolve().parents[1]
-PY = sys.executable
+from tersetalk.noninferiority import noninferiority_test, paired_bootstrap_diff
 
-def \_run(args: list[str]) -> Tuple[int, str, str]:
-p = subprocess.run(args, cwd=str(ROOT), capture_output=True, text=True)
-return p.returncode, p.stdout, p.stderr
+def _gen(n, p, seed):
+rng = random.Random(seed)
+return [1 if rng.random() < p else 0 for _ in range(n)]
 
-def test_calibration_writes_yaml_and_schema(tmp_path: Path):
-outp = tmp_path / "calib.yaml"
-code, out, err = \_run([
-PY, "scripts/calibrate_caps.py",
-"--n", "24",
-"--seed", "123",
-"--out", str(outp),
-"--density-min", "0.6",
-"--summarizers", "extractive", # keep tests offline
-"--gate-modes", "off,on",
-"--token-budgets", "120,240",
-])
-assert code == 0, err
-assert outp.exists() and outp.read_text().strip() # File is JSON (valid YAML) → parse to verify schema
-data = json.loads(outp.read_text())
-assert "best" in data and "grid_evaluations" in data and data["n"] == 24
-best = data["best"]
-assert "spec" in best and "metrics" in best
-assert isinstance(best["metrics"]["avg_est_tokens"], (int, float))
-assert 0.0 <= best["metrics"]["avg_density"] <= 1.0
+def test_schema_and_determinism_small_bootstrap():
+n = 300
+seed = 7
+h = \_gen(n, 0.79, seed)
+l = \_gen(n, 0.78, seed + 1)
 
-def test_determinism_same_seed_same_output(tmp_path: Path):
-out1 = tmp_path / "a.yaml"
-out2 = tmp_path / "b.yaml"
-cmd = [
-PY, "scripts/calibrate_caps.py",
-"--n", "30",
-"--seed", "7",
-"--out", str(out1),
-"--density-min", "0.7",
-"--summarizers", "extractive",
-"--gate-modes", "off,on",
-"--token-budgets", "150,300",
+    rep1 = noninferiority_test(h, l, delta=0.02, n_boot=400, seed=seed)
+    rep2 = noninferiority_test(h, l, delta=0.02, n_boot=400, seed=seed)
+    assert rep1 == rep2
+    # schema fields present
+    for k in ["n","alpha","delta","acc_hybrid","acc_llml","diff",
+              "lb_one_sided_95","ci2_lower_95","ci2_upper_95",
+              "method","n_boot","seed","noninferior","decision"]:
+        assert k in rep1
+
+def test_noninferiority_pass_case(): # Hybrid slightly better than LL; should pass NI at delta=0.02
+n = 500
+seed = 11
+h = \_gen(n, 0.80, seed)
+l = \_gen(n, 0.78, seed + 1)
+rep = noninferiority_test(h, l, delta=0.02, n_boot=400, seed=seed)
+assert rep["noninferior"] is True
+assert rep["lb_one_sided_95"] > -0.02
+
+def test_noninferiority_fail_case(): # Hybrid meaningfully worse; should fail NI
+n = 400
+seed = 21
+h = \_gen(n, 0.73, seed)
+l = \_gen(n, 0.78, seed + 1)
+rep = noninferiority_test(h, l, delta=0.02, n_boot=400, seed=seed)
+assert rep["noninferior"] is False # Typically LB well below -delta
+assert rep["lb_one_sided_95"] <= -0.02
+
+def test_paired_bootstrap_reporting_consistency():
+n = 200
+seed = 3
+h = \_gen(n, 0.76, seed)
+l = \_gen(n, 0.76, seed + 1)
+rpt = paired_bootstrap_diff(h, l, n_boot=300, seed=seed)
+assert abs(rpt.acc_hybrid - rpt.acc_llml) <= 0.1 # sanity
+assert rpt.ci2_lower_95 <= rpt.ci2_upper_95
+
+4. Update tersetalk/**init**.py (replace file)
+   from .\_version import **version**
+
+**all** = [
+"__version__",
+"reproducibility",
+"protocol_jsonl",
+"structured",
+"memory",
+"summarization",
+"hybrid_gate",
+"noninferiority",
 ]
-code, out, err = \_run(cmd)
-assert code == 0, err # rerun with identical args to a different file
-cmd2 = cmd.copy()
-cmd2[-3] = str(out2) # replace outfile
-code2, outb, errb = \_run(cmd2)
-assert code2 == 0, errb # Deterministic content
-assert out1.read_text() == out2.read_text()
-
-def test_gate_affects_routing_with_fake_ll2(tmp_path: Path, monkeypatch):
-"""
-Use TERSETALK_FAKE_LL2_COMPRESS to ensure some routing to freeform when gate is on.
-"""
-outp = tmp_path / "calib.yaml"
-monkeypatch.setenv("TERSETALK_FAKE_LL2_COMPRESS", "80")
-code, out, err = \_run([
-PY, "scripts/calibrate_caps.py",
-"--n", "20",
-"--seed", "42",
-"--out", str(outp),
-"--density-min", "0.5",
-"--summarizers", "extractive",
-"--gate-modes", "off,on",
-"--token-budgets", "100,120",
-])
-assert code == 0, err
-data = json.loads(outp.read_text()) # At least one evaluated spec with gate enabled should have routed_freeform_frac > 0.0
-assert any(
-ev["spec"]["gate_enabled"] and ev["metrics"]["routed_freeform_frac"] > 0.0
-for ev in data["grid_evaluations"]
-)
 
 What to run (and what to paste as evidence in the PR)
 
@@ -471,55 +303,34 @@ Run tests
 
 make test
 
-Calibrate with defaults (50 examples)
+Smoke: NI on synthetic accuracies (should PASS)
 
-python scripts/calibrate_caps.py
+python scripts/noninferiority_smoke.py --n 500 --p-hybrid 0.80 --p-ll 0.78 --delta 0.02 --seed 42 --n-boot 800
 
-Calibrate with custom grid + gate preview (offline, with fake LL2 projection)
+Smoke: NI on synthetic accuracies (should FAIL)
 
-export TERSETALK_FAKE_LL2_COMPRESS=90
-python scripts/calibrate_caps.py \
- --n 50 --seed 123 --density-min 0.7 \
- --summarizers extractive \
- --gate-modes off,on \
- --token-budgets 400,600,800
-unset TERSETALK_FAKE_LL2_COMPRESS
+python scripts/noninferiority_smoke.py --n 400 --p-hybrid 0.73 --p-ll 0.78 --delta 0.02 --seed 7 --n-boot 600
 
 Acceptance evidence to paste in the PR description:
 
 ✅ pytest summary (all green).
 
-✅ Sample of the printed JSON summary from calibrate_caps.py showing best_spec, best_metrics, and out_path.
+✅ Two smoke JSON snippets:
 
-✅ The saved configs/calibration.yaml (JSON-as-YAML) with fields:
+A pass with "noninferior": true and "lb_one_sided_95" > -0.02.
 
-n, seed, density_min
+A fail with "noninferior": false and "lb_one_sided_95" <= -0.02.
 
-grid_evaluations (array of spec+metrics)
-
-best.spec.caps, best.spec.summarizer, best.spec.gate_enabled, best.spec.token_budget
-
-best.metrics.avg_est_tokens, best.metrics.avg_density, best.metrics.routed_freeform_frac
+✅ Verification that the report includes fields: n, alpha, delta, acc_hybrid, acc_llml, diff, lb_one_sided_95, ci2_lower_95, ci2_upper_95, method, n_boot, seed, noninferior, decision.
 
 Commit message
-PR-H2: Calibration sweep for caps/summarizer/gate → configs/calibration.yaml
+PR-H3: One-sided non-inferiority analysis (paired bootstrap)
 
-- Add tersetalk/calibration.py:
-
-  - Deterministic synthetic shard generator
-  - Grid sweep across {caps, summarizer, deref_policy (placeholder), gate on/off, token_budget}
-  - Per-spec evaluation using JSONLValidator, Summarizer, MemoryStore, and Hybrid Gate
-  - Selection: minimize avg_est_tokens subject to avg_density ≥ density_min (fallback to highest density)
-  - save_calibration_yaml() writes JSON (valid YAML) deterministically
-
-- Add scripts/calibrate_caps.py CLI:
-
-  - Configurable grid via flags; prints compact JSON summary and writes configs/calibration.yaml
-
-- Add tests/test_calibration.py:
-
-  - Schema + file creation
-  - Determinism (same seed → identical file)
-  - Gate effect using TERSETALK_FAKE_LL2_COMPRESS
-
-- Update .gitignore to ignore configs/
+- Add tersetalk/noninferiority.py:
+  - Paired bootstrap for d = acc(H) - acc(L)
+  - One-sided lower 95% bound and two-sided 95% CI
+  - noninferiority_test() returns JSON-serializable report and decision
+- Add scripts/noninferiority_smoke.py for synthetic or JSON-supplied outcomes
+- Add tests covering determinism, pass/fail cases, and schema
+- Export 'noninferiority' in package **init**
+- Stdlib-only, offline, deterministic with seed

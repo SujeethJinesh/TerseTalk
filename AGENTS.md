@@ -173,6 +173,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; CLI prints compact summary (best_spec + best_metrics) and writes `configs/calibration.yaml`. Gate effect verified via `TERSETALK_FAKE_LL2_COMPRESS` (routed_freeform_frac > 0 when on).
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
 
+- PR‑H3 — Non-Inferiority (paired bootstrap):
+  - Summary: Adds `tersetalk/noninferiority.py` with a paired-bootstrap one‑sided non‑inferiority test for d=acc(H)−acc(L) at δ=0.02, plus `scripts/noninferiority_smoke.py` and tests. Stdlib-only, deterministic via seed.
+  - Evidence: pytest all green; smoke PASS example shows `noninferior: true` and LB > −δ; smoke FAIL shows `noninferior: false` and LB ≤ −δ. Report includes fields: n, alpha, delta, acc_hybrid, acc_llml, diff, lb_one_sided_95, ci2_lower_95, ci2_upper_95, method, n_boot, seed, noninferior, decision.
+  - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
