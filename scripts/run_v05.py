@@ -13,6 +13,13 @@ if ROOT not in sys.path:
 from tersetalk._version import __version__
 from tersetalk.reproducibility import set_global_seed
 
+# Optional hybrid import (dry-run preview only)
+try:  # pragma: no cover
+  from tersetalk.hybrid_gate import GateCfg, gate_choose_protocol
+except Exception:  # pragma: no cover
+  GateCfg = None  # type: ignore
+  gate_choose_protocol = None  # type: ignore
+
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"]) 
 
 
@@ -47,8 +54,12 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
   show_default=True,
   help="Dry-run prints parsed config JSON and exits 0.",
 )
+@click.option("--hybrid/--no-hybrid", default=False, show_default=True, help="Include hybrid gate decision in dry-run output if probe texts are provided.")
+@click.option("--token-budget", default=600, show_default=True, help="Token budget for hybrid gate (dry-run only).")
+@click.option("--gate-jsonl-probe", default=None, help="JSONL probe text for the gate (dry-run only).")
+@click.option("--gate-freeform-probe", default=None, help="Free-form probe text for the gate (dry-run only).")
 @click.version_option(version=__version__, prog_name="tersetalk v0.5 runner")
-def main(task, system, n, seed, caps, model, out, dry_run):
+def main(task, system, n, seed, caps, model, out, dry_run, hybrid, token_budget, gate_jsonl_probe, gate_freeform_probe):
   """
   TerseTalk v0.5 Runner (PR-01 scaffold)
 
@@ -78,6 +89,23 @@ def main(task, system, n, seed, caps, model, out, dry_run):
     "defaults": defaults,
     "mode": "dry-run" if dry_run else "execute",
   }
+
+  # Optional gate preview for dry-run
+  gate_obj = None
+  if (
+    dry_run
+    and hybrid
+    and gate_jsonl_probe
+    and gate_freeform_probe
+    and GateCfg is not None
+    and gate_choose_protocol is not None
+  ):
+    try:
+      gcfg = GateCfg(token_budget=int(token_budget))  # type: ignore
+      gate_obj = gate_choose_protocol(gate_jsonl_probe, gate_freeform_probe, gcfg)  # type: ignore
+    except Exception as e:  # keep dry-run robust
+      gate_obj = {"error": str(e)}
+  cfg["gate"] = gate_obj
 
   click.echo(json.dumps(cfg, indent=2))
 

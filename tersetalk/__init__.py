@@ -7,4 +7,5 @@ __all__ = [
   "structured",
   "memory",
   "summarization",
+  "hybrid_gate",
 ]
