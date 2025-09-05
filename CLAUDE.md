@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TerseTalk is a Python-first repository with Make-based tooling for dev tasks.
+TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Our work aligns with RESEARCH_PROPOSAL.md, focusing on a compact, typed JSONL inter-agent protocol (v0.5) and a scoped topology extension (v1.0).
 
 ## Development Setup
 
@@ -14,10 +14,13 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks.
 - Install dev deps via Make: `make setup`
 - Run tests: `make test`
 - Lint/format: `make lint` / `make fmt`
+  - Target Python version: 3.12 (Makefile auto-detects `python3.12` or falls back to `python3`).
 
 ### Dependencies
 
 - Tools are defined via `pyproject.toml` and installed by `make setup` (pytest, ruff, black). Prefer suggesting changes to these over adding new tools.
+- Research (v0.5) minimal deps that may be added per PR: `datasets`, `llmlingua==0.2.1`, `pytest-timeout`.
+- Optional deps (guarded, auto-disabled if missing): `bert-score` + `torch`, `tiktoken`.
 
 ## Common Commands
 
@@ -32,10 +35,11 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks.
 ## Project Structure
 
 - Code under `src/`; tests under `tests/`; assets under `assets/`; scripts under `scripts/`; docs under `docs/`.
+ - For research modules, place code under `src/tersetalk/` mirroring proposal layout (protocol_jsonl.py, memory.py, model_io.py, star_runner.py, baselines.py, datasets.py, metrics.py, logging_utils.py). Mirror in `tests/`.
 
 ## Review Protocol (for Claude)
 
-- Objectives: review for correctness, clarity, minimalism, and alignment with the field guide and repo conventions.
+- Objectives: review for correctness, clarity, minimalism, and alignment with the field guide, repo conventions, and RESEARCH_PROPOSAL.md goals.
 - Output:
   - Brief “Review” noting strengths per file.
   - “Minor suggestions” list (max ~5 bullets) of small, actionable improvements.
@@ -43,6 +47,10 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks.
 - Scope:
   - Do not recommend heavy tooling, broad refactors, or speculative defenses unless requested.
   - Favor Makefile/config tweaks, tiny doc fixes, and focused code nits.
+- Research-specific checks:
+  - Confirm PR scope aligns with proposal (≤250 LOC where feasible; includes context, before→after, public APIs, tests, DoD).
+  - Confirm minimal deps usage; optional deps are guarded; no unnecessary tool sprawl.
+  - Check metrics hooks or placeholders align with the evaluation plan (Quality vs Tokens, SP optional, latency, overflow/memory stats).
 - Referencing code:
   - The agent sends `File: <path>\n---\n<content>` blocks only for files changed.
   - Avoid echoing full files back; refer to filenames and line numbers when helpful.

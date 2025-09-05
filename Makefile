@@ -1,4 +1,4 @@
-PY := python3
+PY := $(shell command -v python3.12 >/dev/null 2>&1 && echo python3.12 || echo python3)
 VENV := .venv
 PIP := $(VENV)/bin/pip
 PYTHON := $(VENV)/bin/python
@@ -27,7 +27,7 @@ test:
 	PYTHONPATH=. $(PYTEST)
 
 dev:
-	$(PYTHON) src/primes.py 10
+	@echo "Dev placeholder: research runners coming soon (see RESEARCH_PROPOSAL.md)."
 
 clean:
 	find . -type d -name '__pycache__' -prune -exec rm -rf {} +
