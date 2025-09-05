@@ -138,6 +138,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest passed locally (7 passed); smoke JSON: `same_seed_equal: true`, `diff_seed_unequal: true`. Full JSON and pytest summary included in PR body.
   - Next: Proceed to PR-01 per `RESEARCH_PROPOSAL.md`.
 
+- PR-01 — Repository Scaffold & CLI Skeleton:
+  - Summary: Adds `.gitignore`, `requirements.txt`, package versioning (`tersetalk/_version.py`), updates `pyproject.toml` to 0.0.2, introduces Click-based CLI at `scripts/run_v05.py`, and adds CLI tests. Preserves PR‑00.
+  - Evidence: pytest passed locally (all tests green); `--help` and `--version` print; `--dry-run` emits JSON with defaults from `set_global_seed`. See PR body for copies of outputs.
+  - Next: Proceed to PR-02 per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH

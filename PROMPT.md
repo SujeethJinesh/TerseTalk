@@ -2,334 +2,505 @@ Read through your AGENTS.md and ensure you follow that precisely. Make sure you 
 
 ### PR Summary
 
-PR‑01 — Repository Scaffold & CLI Skeleton
+PR‑02 — JSONL Protocol & Validator
 
-Role: You are a senior engineer implementing PR‑01 for the TerseTalk project, immediately after PR‑00 (reproducibility) was merged.
+Role: You are a senior engineer implementing PR‑02 for the TerseTalk project, right after PR‑01 merged.
 
-Goal (from spec): Provide a minimal, clean repository scaffold and a CLI runner skeleton so that:
+Goal (from spec):
+Create tersetalk/protocol_jsonl.py with a JSONLValidator that:
 
-make install works reliably
+Accepts JSONL/NDJSON strings.
 
-python scripts/run_v05.py --help prints
+Detects mixed format lines.
 
-(nice‑to‑have) --version prints package version and --dry-run emits a JSON config snapshot
+Normalizes lenient object lines to the canonical array form.
 
-Strict scope: Do not implement later PRs (protocol/benchmarks/etc.). Keep dependencies minimal for fast install.
+Enforces soft caps per tag; when exceeded, emits an overflow pointer via M#<id> and an ["o", ...] line.
 
-Requirements & guardrails
+Tracks overflow frequency and reports density proxy: density = 1.0 - (overflow_count / total_lines).
 
-Python ≥ 3.10
+Provides jsonl_to_prose(...) for SP references.
 
-Preserve PR‑00 files and tests; do not remove or break them.
+Returns (validated_jsonl_str, stats_dict).
 
-Keep new runtime deps minimal (only click and tqdm for now).
+Strict scope for PR‑02:
 
-Add package versioning (tersetalk/\_version.py) and expose **version**.
+Do not implement PR‑02S (Instructor), PR‑03 (full MemoryStore), or PR‑04 (Summarizer).
 
-Add .gitignore and a concise README.md.
+Use an internal lightweight memory (incremental M#1, M#2, …) just for PR‑02 tests and the CLI. The real MemoryStore arrives in PR‑03.
 
-Update Makefile so make install installs both runtime and dev requirements.
+Keep dependencies stdlib‑only. No new pip packages.
 
-Provide a CLI skeleton at scripts/run_v05.py using click with these options (stub only, no real execution):
+DoD (Definition of Done):
 
---task {hotpotqa,gsm8k} (default hotpotqa)
+Mixed format detection works and returns (is_mixed: bool, line_index: int).
 
---system {tersetalk,freeform,llmlingua} (default tersetalk)
+Normalization converts objects to arrays per the spec examples.
 
---n (default 100)
+Caps are enforced; long payloads create an overflow summary, a memory pointer (M#k), and an ["o", summary, "M#k", "extractive"] line.
 
---seed (default 0)
+Stats include overflow.count, overflow.per_tag, overflow.rate, and density.
 
---caps (default '{"f":30,"p":20,"q":30}')
-
---model (default mistral)
-
---out (default results)
-
---dry-run / --execute (default --dry-run) → prints parsed config JSON and exits 0
-
---version
-
-Use set_global_seed from PR‑00 to populate deterministic defaults inside the printed JSON.
+Tests pass; CLI guard script runs and demonstrates behavior.
 
 Create/Update the following files exactly
 
-⚠️ Only add/modify what’s listed. Keep PR‑00 tests intact. Where a file already exists, replace it with the contents below.
+Keep all PR‑00 and PR‑01 files working. Only add/modify what’s listed below.
 
-1. .gitignore
-
-# Byte-compiled / cache
-
-**pycache**/
-_.py[cod]
-_.pyo
-_.pyd
-_.so
-_.dll
-_.dylib
-
-# Packaging / build
-
-build/
-dist/
-\*.egg-info/
-.eggs/
-
-# Virtual envs
-
-.venv/
-venv/
-.env
-.envrc
-
-# IDE / OS
-
-.vscode/
-.idea/
-.DS_Store
-
-# Test / coverage
-
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Jupyter
-
-.ipynb_checkpoints/
-
-# Project outputs
-
-results/
-figures/
-
-2. requirements.txt (runtime, minimal for PR‑01)
-   click>=8.1.3
-   tqdm>=4.66.0
-
-3. README.md
-
-# TerseTalk — PR-01 Scaffold
-
-This repository contains the TerseTalk project. PR‑01 adds a minimal repository scaffold and a CLI skeleton.
-
-## Quickstart
-
-````bash
-make install
-python scripts/run_v05.py --help
-python scripts/run_v05.py --version
-python scripts/run_v05.py --task hotpotqa --system tersetalk --n 5 --seed 123 --dry-run
-
-Notes
-
-PR‑00 reproducibility utilities live in tersetalk/reproducibility.py.
-
-The CLI here is a stub. Execution paths (datasets, models, protocol) arrive in later PRs.
-
-
-### 4) Update `Makefile` (replace file)
-
-```make
-.PHONY: install test smoke help
-
-install:
-\tpython -m pip install -U pip
-\tpython -m pip install -e .
-\tpython -m pip install -r requirements.txt -r requirements-dev.txt
-
-test:
-\tpytest -q
-
-smoke:
-\tpython scripts/repro_smoke.py
-
-help:
-\t@echo "Targets: install | test | smoke"
-
-5) Update pyproject.toml to declare package discovery
-[build-system]
-requires = ["setuptools>=65", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "tersetalk"
-version = "0.0.2"
-description = "TerseTalk reproducibility + scaffold (PR-00/PR-01)"
-requires-python = ">=3.10"
-dependencies = []
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["tersetalk*"]
-
-[tool.pytest.ini_options]
-addopts = "-q"
-pythonpath = ["."]
-
-6) tersetalk/_version.py (new)
-__version__ = "0.0.2"
-
-7) Update tersetalk/__init__.py (replace file)
-from ._version import __version__
-
-__all__ = ["__version__", "reproducibility"]
-
-
-(PR‑00’s reproducibility module remains importable as tersetalk.reproducibility.)
-
-8) scripts/run_v05.py (new CLI skeleton)
-from __future__ import annotations
+1. tersetalk/protocol_jsonl.py (new)
+   from **future** import annotations
 
 import json
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Protocol, Tuple
+
+# --- Protocol Tags (single letters) -----------------------------
+
+TAGS: Dict[str, str] = {
+"r": "role", # ["r","M"|"W"|"C"]
+"g": "subgoal", # ["g","<short text>"]
+"f": "fact", # ["f","<text>","M#id"?]
+"u": "assumption", # ["u","<short text>"]
+"p": "plan_step", # ["p","<short text>"]
+"q": "question", # ["q","M|W|C","<question>"]
+"d": "delta_ref", # ["d","M#id"]
+"v": "verdict", # ["v","A"|"R"|"E"]
+"o": "overflow", # ["o","<summary>","M#ref","extractive"]
+"t": "free_text", # ["t","<very short>"]
+"x": "context" # ["x","<key>","<val>"]
+}
+
+# --- Minimal memory interface for PR-02 only --------------------
+
+class SupportsPut(Protocol):
+def put(self, text: str) -> str: ...
+
+class \_LocalMemory:
+"""
+PR-02-only, lightweight in-module memory to mint M# ids.
+PR-03 will provide a full MemoryStore; this is intentionally minimal.
+"""
+def **init**(self) -> None:
+self.\_store: Dict[str, str] = {}
+self.\_ctr: int = 0
+
+    def put(self, text: str) -> str:
+        self._ctr += 1
+        mid = f"M#{self._ctr}"
+        self._store[mid] = text
+        return mid
+
+# --- Helper ------------------------------------------------------
+
+def \_token_estimate(text: str) -> int:
+"""Cheap token estimator used throughout this repo."""
+return max(0, (len(text) + 3) // 4)
+
+# --- JSONL Validator --------------------------------------------
+
+@dataclass
+class JSONLValidator:
+"""
+Validate + normalize JSONL, enforce soft caps, and create overflow lines.
+
+    caps: per-tag target token caps. Missing keys fall back to defaults.
+    memory: object with .put(text)->"M#k" used to store overflow text.
+    """
+    caps: Dict[str, int] = field(default_factory=dict)
+    memory: Optional[SupportsPut] = None
+
+    def __post_init__(self) -> None:
+        default_caps = {"f": 30, "p": 20, "q": 30, "g": 30, "u": 20, "t": 50}
+        merged = dict(default_caps)
+        merged.update(self.caps or {})
+        self.caps = merged
+        self.memory = self.memory or _LocalMemory()
+        self.overflow_freq: Dict[str, int] = {}
+
+    # ---------- Detection ----------
+    def detect_format_break(self, output: str) -> Tuple[bool, int]:
+        """
+        Returns (is_mixed, line_number_of_break).
+        Mixed if any non-empty line does not start with '[' or '{'.
+        """
+        lines = [ln for ln in output.splitlines() if ln.strip()]
+        for i, line in enumerate(lines):
+            s = line.lstrip()
+            if not (s.startswith("[") or s.startswith("{")):
+                return True, i
+        return False, -1
+
+    # ---------- Normalization ----------
+    def normalize_line(self, raw: str) -> List[Any]:
+        """
+        Convert a lenient object form to the canonical array form.
+        Unknown structures become ["t", "<stringified>"].
+        """
+        s = raw.strip()
+        if not s:
+            return ["t", ""]
+        if s[0] == "[":
+            arr = json.loads(s)
+            if isinstance(arr, list):
+                return arr
+            return ["t", json.dumps(arr, separators=(",", ":"))]
+        if s[0] == "{":
+            obj = json.loads(s)
+            # If explicit 'tag'
+            if "tag" in obj:
+                tag = obj.get("tag")
+                if tag == "f":
+                    text = obj.get("text") or obj.get("value") or obj.get("f") or ""
+                    ref = obj.get("ref") or obj.get("id")
+                    return ["f", str(text)] + ([str(ref)] if ref else [])
+                if tag == "q":
+                    who = obj.get("role") or obj.get("to") or obj.get("who") or "W"
+                    text = obj.get("text") or obj.get("question") or ""
+                    return ["q", str(who), str(text)]
+                if tag == "r":
+                    role = obj.get("role") or obj.get("r") or "M"
+                    return ["r", str(role)]
+                if tag in TAGS:
+                    # generic object: prefer 'text' or tag-named key
+                    v = obj.get("text", obj.get(tag, ""))
+                    if isinstance(v, list):
+                        return [tag] + v
+                    return [tag, str(v)]
+                # unknown tag → t
+                return ["t", json.dumps(obj, separators=(",", ":"))]
+
+            # No explicit 'tag': look for single-letter key
+            for k in TAGS.keys():
+                if k in obj:
+                    v = obj[k]
+                    if isinstance(v, list):
+                        return [k] + v
+                    return [k, str(v)]
+            # Fall back
+            return ["t", json.dumps(obj, separators=(",", ":"))]
+
+        # Fallback for raw text lines (not valid JSON) → 't'
+        return ["t", s]
+
+    # ---------- (De)serialization helpers ----------
+    def jsonl_to_prose(self, lines: str) -> str:
+        """Convert canonical array-lines to simple prose (for SP reference)."""
+        prose: List[str] = []
+        for ln in [ln for ln in lines.splitlines() if ln.strip()]:
+            try:
+                arr = json.loads(ln)
+            except Exception:
+                continue
+            if not isinstance(arr, list) or not arr:
+                continue
+            tag = arr[0]
+            if tag == "g":
+                prose.append(f"Goal: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "f":
+                prose.append(f"Fact: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "u":
+                prose.append(f"Assumption: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "p":
+                prose.append(f"Plan: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "q":
+                who = arr[1] if len(arr) > 1 else ""
+                txt = arr[2] if len(arr) > 2 else ""
+                prose.append(f"Question ({who}): {txt}")
+            elif tag == "v":
+                prose.append(f"Verdict: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "o":
+                mid = arr[2] if len(arr) > 2 else ""
+                prose.append(f"Overflow: {arr[1] if len(arr)>1 else ''} [{mid}]")
+            elif tag == "d":
+                prose.append(f"Ref: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "r":
+                prose.append(f"Role: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "t":
+                prose.append(f"Note: {arr[1] if len(arr)>1 else ''}")
+            elif tag == "x":
+                key = arr[1] if len(arr) > 1 else ""
+                val = arr[2] if len(arr) > 2 else ""
+                prose.append(f"Meta: {key}={val}")
+        return "\n".join(prose)
+
+    # ---------- Internal: summarization stub ----------
+    def _summarize(self, text: str, target_tokens: int) -> str:
+        """
+        PR-02 stub: simple word-capped summary with ellipsis.
+        PR-04 will provide a proper summarization module.
+        """
+        words = text.strip().split()
+        if len(words) <= target_tokens:
+            return text
+        return " ".join(words[:target_tokens]) + "..."
+
+    # ---------- Core: validation + overflow ----------
+    def validate_and_overflow(self, jsonl: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        Validate JSONL, normalize to arrays, enforce caps, and emit overflow lines.
+        Returns (validated_jsonl_str, stats_dict).
+        """
+        out_lines: List[str] = []
+        self.overflow_freq.clear()
+
+        raw_lines = [ln for ln in jsonl.splitlines() if ln.strip()]
+        for raw in raw_lines:
+            arr = self.normalize_line(raw)
+            if not isinstance(arr, list) or not arr:
+                arr = ["t", json.dumps(raw)]
+
+            tag = arr[0]
+            if tag not in TAGS:
+                # Unknown tag → coerce to free_text
+                arr = ["t", json.dumps(arr, separators=(",", ":"))]
+                tag = "t"
+
+            # Enforce caps on textual payloads; q has (role, text)
+            cap = self.caps.get(tag)
+            if tag == "q":
+                role = arr[1] if len(arr) > 1 else "W"
+                text = arr[2] if len(arr) > 2 else ""
+                if isinstance(text, str) and cap is not None and _token_estimate(text) > cap:
+                    summary = self._summarize(text, cap)
+                    mid = self.memory.put(text)  # type: ignore[union-attr]
+                    self.overflow_freq[tag] = self.overflow_freq.get(tag, 0) + 1
+                    out_lines.append(json.dumps(["q", role, summary]))
+                    out_lines.append(json.dumps(["o", summary, mid, "extractive"]))
+                else:
+                    out_lines.append(json.dumps(["q", role, text]))
+                continue
+
+            if tag in ("f", "p", "g", "u", "t"):
+                text = arr[1] if len(arr) > 1 else ""
+                if isinstance(text, str) and cap is not None and _token_estimate(text) > cap:
+                    summary = self._summarize(text, cap)
+                    mid = self.memory.put(text)  # type: ignore[union-attr]
+                    self.overflow_freq[tag] = self.overflow_freq.get(tag, 0) + 1
+                    # For 'f', attach inline M# pointer as third element; for others, only summary text.
+                    new_line = ["f", summary, mid] if tag == "f" else [tag, summary]
+                    out_lines.append(json.dumps(new_line))
+                    out_lines.append(json.dumps(["o", summary, mid, "extractive"]))
+                else:
+                    out_lines.append(json.dumps(arr))
+                continue
+
+            # Pass-through for non-textual or control tags ('r','d','v','x','o')
+            out_lines.append(json.dumps(arr))
+
+        total_lines = len(out_lines)
+        overflow_count = sum(self.overflow_freq.values())
+        rate = overflow_count / total_lines if total_lines else 0.0
+        density = 1.0 - rate
+
+        stats = {
+            "lines_total": total_lines,
+            "overflow": {
+                "count": overflow_count,
+                "per_tag": {k: v for k, v in self.overflow_freq.items() if v},
+                "rate": rate,
+            },
+            "density": density,
+        }
+        return "\n".join(out_lines), stats
+
+    # ---------- Public utility ----------
+    def estimate_tokens(self, text: str) -> int:
+        return _token_estimate(text)
+
+2. scripts/jsonl_guard.py (new)
+   from **future** import annotations
+
+import argparse
+import json
 import sys
-import click
+from tersetalk.protocol_jsonl import JSONLValidator
 
-from tersetalk._version import __version__
-from tersetalk.reproducibility import set_global_seed
+def main():
+ap = argparse.ArgumentParser(description="TerseTalk JSONL guard (PR-02)")
+ap.add_argument("--caps", type=str, default='{"f":30,"p":20,"q":30}',
+help='Per-tag caps JSON, e.g. \'{"f":20,"q":25}\'')
+ap.add_argument("--fail-on-mixed", action="store_true",
+help="Exit nonzero if mixed format detected.")
+ap.add_argument("--input", type=str, default="-",
+help="Path to JSONL file or '-' for stdin.")
+args = ap.parse_args()
 
-CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-
-@click.command(context_settings=CONTEXT_SETTINGS)
-@click.option("--task", type=click.Choice(["hotpotqa", "gsm8k"]), default="hotpotqa", show_default=True, help="Benchmark task to run.")
-@click.option("--system", type=click.Choice(["tersetalk", "freeform", "llmlingua"]), default="tersetalk", show_default=True, help="System variant to run.")
-@click.option("--n", default=100, show_default=True, help="Number of examples.")
-@click.option("--seed", default=0, show_default=True, help="Global random seed.")
-@click.option("--caps", default='{"f":30,"p":20,"q":30}', show_default=True, help="Soft caps JSON for tags.")
-@click.option("--model", default="mistral", show_default=True, help="Model name (placeholder).")
-@click.option("--out", default="results", show_default=True, help="Output directory.")
-@click.option("--dry-run/--execute", default=True, show_default=True, help="Dry-run prints parsed config JSON and exits 0.")
-@click.version_option(version=__version__, prog_name="tersetalk v0.5 runner")
-def main(task, system, n, seed, caps, model, out, dry_run):
-    """
-    TerseTalk v0.5 Runner (PR-01 scaffold)
-
-    This command provides a CLI skeleton only. Use --dry-run (default) to print
-    the parsed configuration. Execution paths are implemented in later PRs.
-    """
     try:
-        parsed_caps = json.loads(caps)
-        if not isinstance(parsed_caps, dict):
+        caps = json.loads(args.caps)
+        if not isinstance(caps, dict):
             raise ValueError
     except Exception:
-        click.echo(
-            'Error: --caps must be a JSON object, e.g. \'{"f":30,"p":20,"q":30}\'',
-            err=True,
-        )
+        print("Error: --caps must be a JSON object.", file=sys.stderr)
         sys.exit(2)
 
-    defaults = set_global_seed(int(seed))
-    cfg = {
-        "task": task,
-        "system": system,
-        "n": int(n),
-        "seed": int(seed),
-        "caps": parsed_caps,
-        "model": model,
-        "out": out,
-        "defaults": defaults,
-        "mode": "dry-run" if dry_run else "execute",
-    }
+    if args.input == "-":
+        data = sys.stdin.read()
+    else:
+        with open(args.input, "r", encoding="utf-8") as f:
+            data = f.read()
 
-    click.echo(json.dumps(cfg, indent=2))
+    validator = JSONLValidator(caps=caps)
+    mixed, idx = validator.detect_format_break(data)
+    if mixed and args.fail_on_mixed:
+        print(json.dumps({"mixed_format": True, "break_line": idx}), file=sys.stderr)
+        sys.exit(3)
 
-    if dry_run:
-        sys.exit(0)
+    out, stats = validator.validate_and_overflow(data)
+    res = {"mixed_format": mixed, "break_line": idx, "stats": stats, "out": out}
+    print(json.dumps(res, indent=2))
 
-    # Execution path intentionally unimplemented in PR-01
-    click.echo("Execution mode is not implemented in PR-01.", err=True)
-    sys.exit(0)
+if **name** == "**main**":
+main()
 
+3. Update tersetalk/**init**.py to export the new module (replace file)
+   from .\_version import **version**
 
-if __name__ == "__main__":
-    main()
+# Keep reproducibility (PR-00) import path working
 
-9) New tests: tests/test_cli_scaffold.py
-from __future__ import annotations
+**all** = ["__version__", "reproducibility", "protocol_jsonl"]
+
+(Do not import heavy symbols at package import time; tests import directly from module files.)
+
+4. tests/test_protocol_jsonl.py (new)
+   from **future** import annotations
 
 import json
-import sys
-import subprocess
-from pathlib import Path
+import re
+from tersetalk.protocol_jsonl import JSONLValidator
 
-ROOT = Path(__file__).resolve().parents[1]
+def test_detect_format_break():
+v = JSONLValidator()
+s = '["f","ok"]\nnot json\n{"g":"x"}'
+mixed, idx = v.detect_format_break(s)
+assert mixed is True and idx == 1
+s2 = '["f","ok"]\n{"g":"x"}'
+mixed2, idx2 = v.detect_format_break(s2)
+assert mixed2 is False and idx2 == -1
 
-def run_cmd(args: list[str]):
-    return subprocess.run(args, cwd=str(ROOT), capture_output=True, text=True)
+def test_normalize_object_to_array():
+v = JSONLValidator()
+a = v.normalize_line('{"f":"Event A: 2001"}')
+assert a == ["f", "Event A: 2001"]
+b = v.normalize_line('{"tag":"f","text":"Event A","id":"M#12"}')
+assert b == ["f", "Event A", "M#12"]
+c = v.normalize_line('{"tag":"q","role":"W","text":"Which is earlier?"}')
+assert c == ["q", "W", "Which is earlier?"]
 
-def test_help_exits_zero_and_shows_options():
-    r = run_cmd([sys.executable, "scripts/run_v05.py", "--help"])
-    assert r.returncode == 0
-    # Click may print to stdout
-    out = r.stdout + r.stderr
-    assert "--task" in out and "--system" in out and "--dry-run" in out
+def test_validate_and_overflow_creates_o_lines_and_pointers():
+v = JSONLValidator(caps={"f": 5, "q": 5})
+long_fact = "alpha beta gamma delta epsilon zeta eta theta iota kappa"
+long_q = "please compare the following two things and return the earlier"
+raw = "\n".join([
+'["r","M"]',
+json.dumps(["f", long_fact]),
+json.dumps(["q", "W", long_q]),
+'["g","short goal"]'
+])
+out, stats = v.validate_and_overflow(raw)
+lines = out.splitlines()
 
-def test_version_flag_prints_version():
-    r = run_cmd([sys.executable, "scripts/run_v05.py", "--version"])
-    assert r.returncode == 0
-    out = (r.stdout + r.stderr).lower()
-    assert "tersetalk v0.5 runner" in out or "version" in out
+    # Expect o-lines present
+    o_lines = [ln for ln in lines if ln.strip().startswith('["o"')]
+    assert len(o_lines) >= 2
 
-def test_dry_run_json_shape_is_valid():
-    r = run_cmd([
-        sys.executable, "scripts/run_v05.py",
-        "--task", "hotpotqa",
-        "--system", "tersetalk",
-        "--n", "3",
-        "--seed", "123",
-        "--caps", '{"f":30,"p":20,"q":30}',
-        "--dry-run"
-    ])
-    assert r.returncode == 0
-    data = json.loads(r.stdout)
-    assert data["task"] == "hotpotqa"
-    assert data["system"] == "tersetalk"
-    assert data["n"] == 3
-    assert data["seed"] == 123
-    assert data["caps"]["f"] == 30
-    assert data["defaults"]["seed"] == 123
+    # Fact line should be summarized and may include inline M# pointer as third field
+    fact_lines = [json.loads(ln) for ln in lines if ln.startswith('["f"')]
+    assert len(fact_lines) == 1
+    fact_arr = fact_lines[0]
+    assert fact_arr[0] == "f"
+    if len(fact_arr) >= 3:
+        assert re.match(r"^M#\d+$", fact_arr[2])  # has pointer
 
-What to run (and what to paste as evidence in the PR)
+    # q-line summarized
+    q_lines = [json.loads(ln) for ln in lines if ln.startswith('["q"')]
+    assert len(q_lines) == 1
+    assert q_lines[0][0] == "q" and isinstance(q_lines[0][2], str)
 
-Install
+    # Stats must include density proxy
+    assert "density" in stats and 0.0 <= stats["density"] <= 1.0
+    assert stats["overflow"]["count"] >= 2
+    assert stats["overflow"]["rate"] == stats["overflow"]["count"] / stats["lines_total"]
 
+def test*jsonl_to_prose_roundtrip_signal():
+v = JSONLValidator()
+js = '\n'.join([
+'["r","M"]',
+'["g","Compare dates"]',
+'["f","Event A: 2001-01-01"]',
+'["q","W","Which is earlier?"]'
+])
+out, * = v.validate_and_overflow(js)
+prose = v.jsonl_to_prose(out)
+assert "Goal:" in prose and "Fact:" in prose and "Question (W):" in prose
+
+5. Optional: add a smoke sample to the README (append)
+
+Append this section to the bottom of README.md:
+
+## PR-02 quick smoke
+
+````bash
+# Mixed format + overflow demo
+python scripts/jsonl_guard.py --caps '{"f":5,"q":5}' <<'EOF'
+["r","M"]
+{"f":"alpha beta gamma delta epsilon zeta eta"}
+["q","W","please compare the following two long things"]
+plain text line (mixed!)
+EOF
+
+
+---
+
+## What to run (and what to paste as evidence in the PR)
+
+1) **Install (unchanged)**
+```bash
 make install
 
 
-Tests
+Run tests
 
 make test
 
 
-Help & Version
+Quick smoke via CLI
 
-python scripts/run_v05.py --help
-python scripts/run_v05.py --version
-
-
-Dry‑run sample
-
-python scripts/run_v05.py --task hotpotqa --system tersetalk --n 5 --seed 123 --dry-run
+python scripts/jsonl_guard.py --caps '{"f":5,"q":5}' <<'EOF'
+["r","M"]
+{"f":"alpha beta gamma delta epsilon zeta eta"}
+["q","W","please compare the following two long things"]
+EOF
 
 
 Acceptance evidence to paste in PR description:
 
-The full pytest summary (should be all green, including PR‑00 tests).
+✅ pytest summary (all green).
 
-The --help output snippet showing options.
+✅ jsonl_guard.py JSON output snippet showing:
 
-The --version output line.
+mixed_format (true/false) and break_line index correct for mixed inputs.
 
-The JSON blob from the dry‑run command.
+stats.density and stats.overflow.{count,per_tag,rate} present.
+
+out contains:
+
+summarized ["f", "...", "M#k"] (pointer present for facts),
+
+summarized ["q", "W", "..."],
+
+at least two ["o", "...", "M#k", "extractive"] lines.
 
 Commit message
-PR-01: Repository scaffold & CLI skeleton
+PR-02: JSONL protocol & validator
 
-- Add .gitignore, minimal requirements.txt, concise README
-- Update Makefile to install runtime + dev deps
-- Add package versioning (tersetalk/_version.py), expose __version__
-- Update pyproject to ensure package discovery
-- Introduce scripts/run_v05.py Click-based CLI with --help/--version/--dry-run
-- Add CLI tests; preserve PR-00 reproducibility utilities and tests
-- DoD: `make install` works; `python scripts/run_v05.py --help` prints
+- Implement tersetalk/protocol_jsonl.py with JSONLValidator:
+  * mixed-format detection, lenient→canonical normalization
+  * soft-cap enforcement for tags (f,p,g,u,q,t)
+  * overflow handling with M# pointers and ["o", ...] records
+  * density proxy and overflow stats reporting
+  * jsonl_to_prose() and estimate_tokens() utilities
+- Add scripts/jsonl_guard.py for CLI validation and overflow demo
+- Add tests for detection, normalization, overflow behavior, and prose export
+- Export module in tersetalk.__init__
+- DoD: tests pass; CLI demonstrates caps + overflow; density metric reported
 ````

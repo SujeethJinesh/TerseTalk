@@ -16,3 +16,15 @@ Notes
 PR‑00 reproducibility utilities live in `tersetalk/reproducibility.py`.
 
 The CLI here is a stub. Execution paths (datasets, models, protocol) arrive in later PRs.
+
+## PR-02 quick smoke
+
+```bash
+# Mixed format + overflow demo
+python scripts/jsonl_guard.py --caps '{"f":5,"q":5}' <<'EOF'
+["r","M"]
+{"f":"alpha beta gamma delta epsilon zeta eta"}
+["q","W","please compare the following two long things"]
+plain text line (mixed!)
+EOF
+```
