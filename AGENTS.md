@@ -143,6 +143,16 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest passed locally (all tests green); `--help` and `--version` print; `--dry-run` emits JSON with defaults from `set_global_seed`. See PR body for copies of outputs.
   - Next: Proceed to PR-02 per `RESEARCH_PROPOSAL.md`.
 
+- PR-02 — JSONL Protocol & Validator:
+  - Summary: Adds `tersetalk/protocol_jsonl.py` with `JSONLValidator` for detection, normalization, caps + overflow (M# pointers, ["o", ...] lines), density metric, and a `jsonl_to_prose` helper; includes `scripts/jsonl_guard.py` and tests.
+  - Evidence: pytest all green; `jsonl_guard.py` outputs JSON showing mixed_format, stats {overflow: {count, per_tag, rate}, density}, and normalized+overflowed `out`. See PR body for snippets.
+  - Next: Proceed to PR-02S/PR-03 per `RESEARCH_PROPOSAL.md`.
+
+- PR-02S — Structured Output with Instructor:
+  - Summary: Adds `tersetalk/structured.py` with typed Pydantic models for all tags, generic `TerseTalkLine`, converters, `EchoGenerator` (offline), `InstructorGenerator` (guarded). Adds `scripts/structured_demo.py` and tests.
+  - Evidence: pytest all green; Echo demo JSON shows `compliance_ok: true`, canonical `lines_jsonl`, and validator stats. Runtime deps pinned to: pydantic==2.11.7, instructor==1.11.2, openai==1.106.1.
+  - Next: Proceed to PR-03 MemoryStore per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
