@@ -128,7 +128,7 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
 
 - PR-00 — Reproducibility Infrastructure:
   - Summary: Adds `tersetalk/reproducibility.py` with `set_global_seed`, fingerprint helpers, tests, and a smoke script. Optional NumPy/Torch guarded.
-  - Evidence: pytest passed locally; smoke JSON showed same-seed equality and different-seed inequality. See PR body for JSON + pytest summary.
+  - Evidence: pytest passed locally (6 passed); smoke JSON: `same_seed_equal: true`, `diff_seed_unequal: true`. Full JSON and pytest summary included in PR body.
   - Next: Proceed to PR-01 per `RESEARCH_PROPOSAL.md`.
 
 THE MAKE IT WORK FIRST FIELD GUIDE
