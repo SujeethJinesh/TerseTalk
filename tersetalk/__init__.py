@@ -5,4 +5,5 @@ __all__ = [
   "reproducibility",
   "protocol_jsonl",
   "structured",
+  "memory",
 ]
