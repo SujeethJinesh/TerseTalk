@@ -5,6 +5,40 @@
 - Current repo is minimal: `README.md`, `LICENSE`, and contributor docs. Place new code under `src/`, tests under `tests/`, assets under `assets/`, scripts under `scripts/`, and additional docs under `docs/`.
 - Keep modules small and cohesive. Mirror `src/` structure in `tests/` (e.g., `src/core/parser.ts` → `tests/core/parser.spec.ts`).
 
+### Handoff Quick Start (Structure & Entrypoints)
+
+- Code layout:
+  - `tersetalk/`: core modules (protocol_jsonl.py, memory.py, model_io.py, baselines.py, datasets.py, metrics.py, pipeline_runner.py, hybrid_gate.py, protocol_handler.py, calibration.py, noninferiority.py, statistics.py, etc.)
+  - `scripts/`: CLIs (run_v05.py, run_evaluation.py, analyze_v05.py, run_significance.py, plus smoke utilities)
+  - `tests/`: pytest suite mirroring modules; includes smokes for CLIs and offline determinism
+  - `benchmarks/`: microbenchmarks (optional)
+  - `results/`: run outputs (ResultsManager writes date-stamped runs and a `latest` pointer)
+
+- Main CLIs:
+  - `scripts/run_v05.py`: v0.5 experiment runner (tersetalk/freeform/llmlingua)
+  - `scripts/run_evaluation.py`: paper-grade evaluation driver (caps grid + hybrid budgets)
+  - `scripts/analyze_v05.py`: analysis (by_run.csv, tree-wide Pareto CSV/PDF, deterministic caps ablation CSV/PDF, provenance enrichment)
+  - `scripts/run_significance.py`: bootstrap significance + non-inferiority (numpy-only)
+
+- Real runs (local-first):
+  - Default real backend is Ollama (OpenAI-compatible): base_url `http://localhost:11434/v1`, api_key `ollama`, model from `OLLAMA_MODEL` (e.g., `phi:latest`, `llama3.1:8b`).
+  - EchoModel is used only for offline smoke/tests; avoid mocks in reported results.
+
+- Quick routine:
+  1) `. .venv/bin/activate && make install && make test`
+  2) Small local eval (e.g., 3 samples):
+     - `export OLLAMA_MODEL="phi:latest"`
+     - `python scripts/run_evaluation.py --task hotpotqa --systems tersetalk freeform llmlingua hybrid --n 3 --seed 0 --model $OLLAMA_MODEL --out results/eval_local`
+  3) Analyze: `python scripts/analyze_v05.py --indir results/eval_local --outdir results/eval_local/figures`
+  4) Significance: `python scripts/run_significance.py --results-dir results/eval_local/<task>/<timestamp>`
+  5) Attach figures/JSON to PR as evidence.
+
+### PR Workflow Mandate (copy/paste for each PR)
+
+```
+Read through your @AGENTS.md and ensure you follow that precisely. Make sure you fully understand and have read through the updated @RESEARCH_PROPOSAL.md. First verify, which branch we're on and return to the main branch if we're not there. Ensure you pull the latest main branch before branching off for the rest of the PR. I want you to implement a PR of the @RESEARCH_PROPOSAL.md on a new branch and create a PR for it with a very good review using yourself, claude code, and yourself again of course as mentioned in the @AGENTS.md. To ask claude code for a review, you can do something like `echo "Please ensure you understand @RESEARCH_PROPOSAL.md. I am implementing PR-X. Please review the following files I created: @README.md, @xxx. Ensure that my implementation is properly aligned with the goals of the project. Also here is some additional data on the runs I gathered, please critique it as if you're a senior data scientist and ensure that I'm not cheating on the results, lying, or misrepresenting things" | claude -p --dangerously-skip-permissions --model opus`. Please ensure you are indeed calling it like `claude -p --dangerously-skip-permissions --model opus` and ensure you get both the code review, and the data review, and an additional PI review about the state of the project with Claude and yourself. You must be truthful and honest, and address all the points Claude makes (though keep away from making fakes or mocks). If you need to create fakes or mocks for debugging, delete them afterwards so as to not confuse fakes and mocks for actual results. You must only present results from real model runs as much as possible for our project. It's imperative. Ensure that you are going back and incorporating feedback from claude and yourself as necessary. You must continue this loop until both you and claude agree with each other and give yourselfs both approval without nits. After that you should push your changes up for review. Ensure you're aligned with the spirit of the proposal. Then send a PR out so I can review it after your implementation is pushed up. If you run into any major roadblocks, let me know and be detailed. Also update your @AGENTS.md and CLAUDE.md to ensure that when you are asking for a review from CLAUDE, to refer to the @RESEARCH_PROPOSAL.md and ensure you review it in the spirit of that as well. It's imperative that we always keep the @RESEARCH_PROPOSAL.md up to date. You must provide a very small summary of the results after the PR was checked in (update @AGENTS.md and ask @CLAUDE.md to review that as well every PR). This way when a new session starts, it is easy to get back up to speed on the latest work that needs to be done. Please also ensure you use the .venv created at all times. Ensure that if you are debugging failures or such and need to create additional scripts, that you clean them up afterwards. It's incredibly important that you keep the code clean and minimal. We want it to do the job correctly. Before you merge the PR, you must wait for my approval. Also at the end I want you to outline any risks we are seeing in this project, are our expectations aligned with how the progress is going? Will our project succeed and achieve the baselines we expect using your best judgement? Absolutely make sure you're reporting results truthfully and honestly. Avoid fake, mocked, or other non genuine results. You should also analyze the results we get for each run and determine if they meet our figures of merit, when you report back, it's crucial to include that analysis (e.g. compression amount, failure rate, latency, etc.). We should be aiming to properly fix things and run proper evaluations. If we do have any expected goals or outcomes (e.g. >= 10x on xyz) and they aren't achieved, then explain why, but do not lie or cheat and use drastically contrived inefficient metrics. It's important to generally be comparing to a standard implementation. Please also report the results on real data runs, it's important that we start gathering as much data on real runs as possible now so it can be reviewed by Claude AND YOU. If you see there are problems or optimizations, don't hesitate to suggest them as we collect more data. Here are more detailed instructions for PR implementation.
+```
+
 ## Build, Test, and Development Commands
 
 - No build system is defined yet. When introducing tooling, prefer Make targets for a consistent DX:
@@ -390,3 +424,8 @@ You are writing code to test the minimal viable research proposal.
   - Summary: Upgrades `scripts/analyze_v05.py` with tree-wide Pareto CSV+PDF, deterministic cap ablations from filename-parsed caps, and provenance enrichment (tokens_method, sp_method, timestamp, git hash). Headless; stdlib+numpy+matplotlib only; keeps prior outputs for back-compat.
   - Evidence: pytest green; new smoke test `tests/test_analyze_min.py` creates a tiny faux run and the tool emits `pareto_points.csv` + `pareto_frontier.pdf`. Compatible with PR‑14 outputs (e.g., `tersetalk_f*_p*_q*.jsonl`).
   - Next: Run on latest Ollama runs (phi, llama3.1:8b) and attach figures to PRs.
+
+- PR-16 — Statistical Significance & Non‑Inferiority:
+  - Summary: Adds `tersetalk/statistics.py` (numpy-only bootstrap: paired CI, percent reduction, mean CI, one-sided p, noninferiority) and `scripts/run_significance.py` CLI. Produces concise console lines and `significance_tests.json` from PR‑14 JSONL outputs.
+  - Evidence: pytest green; `tests/test_statistics_smoke.py` creates minimal aligned rows and verifies JSON output; Claude review Approved: no nits.
+  - Next: Run on Ollama evaluation outputs (phi, llama3.1:8b) to quantify token reductions and quality deltas; attach reports to PRs.
