@@ -10,4 +10,5 @@ __all__ = [
   "hybrid_gate",
   "noninferiority",
   "protocol_handler",
+  "model_io",
 ]
