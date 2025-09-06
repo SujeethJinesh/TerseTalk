@@ -178,6 +178,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; smoke PASS example shows `noninferior: true` and LB > −δ; smoke FAIL shows `noninferior: false` and LB ≤ −δ. Report includes fields: n, alpha, delta, acc_hybrid, acc_llml, diff, lb_one_sided_95, ci2_lower_95, ci2_upper_95, method, n_boot, seed, noninferior, decision.
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
 
+- PR‑H4 — Protocol Handler (LLMLingua touchpoints):
+  - Summary: Adds `tersetalk/protocol_handler.py` with `PHConfig` and `ProtocolHandler` implementing three toggleable touchpoints: pre‑overflow LL2 compression, overflow summarization method (llmlingua), and dereference injection with optional LL2 compression; includes counters. Adds `scripts/protocol_handler_smoke.py` and extends `scripts/run_v05.py` with flags and a `--protocol-demo` dry‑run preview.
+  - Evidence: pytest all green; smoke shows preoverflow success (no `o` lines, counters.succeeded>0), overflow `o` lines labeled `llmlingua`, and deref injection replacing `d` with `f` plus counters.deref.ll2_compressed>0; run_v05 dry‑run includes protocol_demo.
+  - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
