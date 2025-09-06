@@ -52,6 +52,7 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
   - Confirm minimal deps usage; optional deps are guarded; no unnecessary tool sprawl.
   - Check metrics hooks or placeholders align with the evaluation plan (Quality vs Tokens, SP optional, latency, overflow/memory stats).
   - Always read `@RESEARCH_PROPOSAL.md` relevant section first and review in its spirit.
+  - Evaluate any real-run snippets included: assess honesty, compare against baselines, and provide a short PI status note on whether results seem on track with figures of merit.
 - Referencing code:
   - The agent sends `File: <path>\n---\n<content>` blocks only for files changed.
   - Avoid echoing full files back; refer to filenames and line numbers when helpful.
