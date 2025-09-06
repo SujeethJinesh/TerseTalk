@@ -2,342 +2,652 @@ Read through your AGENTS.md and ensure you follow that precisely. Make sure you 
 
 ### PR Summary
 
-PR‑05 — model_io.py + smoke + tests
+You will implement 2 PRs in one.
 
-Role: You are a senior engineer implementing PR‑05 immediately after PR‑MB merged.
+PR‑08B — Baselines knobs & minor nits
 
-Goal (from spec):
-Provide a clean ModelClient that can:
+- Parameterize max_tokens in run_freeform_once/run_llmlingua_once; surface via smoke CLI.
+- Add brief comment in build_freeform_prompt explaining lone "Question:" line retention.
+- Tests: determinism unchanged with default params; schema intact.
 
-call_jsonl_strict(...) → List[TerseTalkLine] using Instructor to guarantee schema‑valid outputs (Pydantic from PR‑02S).
+PR‑11 — Experiment Driver
 
-call_text(...) → str for free‑form prompts (used by baselines later).
+Role: You are a senior engineer implementing the Experiment Driver for TerseTalk v0.5. Your task is to create a robust CLI script and a smoke test that align with the proposal’s PR‑11 plan, integrating previously merged modules.
 
-Ship an EchoModel for deterministic, offline CI.
+Objectives
 
-Include helpers to dump JSONL strings from typed lines.
+Add a single entrypoint script scripts/run_v05.py that:
 
-Constraints:
+Loads a task split (hotpotqa, gsm8k, and a lightweight synth for CI).
 
-Use OpenAI Python SDK + Instructor patched client, pointing at an Ollama OpenAI‑compatible base URL (default http://localhost:11434/v1).
+Runs one of {tersetalk | freeform | llmlingua} systems.
 
-Tests must pass offline using EchoModel.
+Computes per‑example and aggregate metrics (accuracy, tokens, SP, bytes‑on‑wire, overflow counts).
 
-Real endpoint smoke is optional and guarded by an env var (no CI dependency).
+Saves results in a versioned run directory via ResultsManager (PR‑09):
 
-Keep prior tests green.
+config.json (exact run configuration)
 
-DoD (Definition of Done):
+raw_outputs.jsonl (one JSON object per example)
 
-tersetalk/model_io.py implements ModelClient, EchoModel, and JSONL helpers.
+metrics.csv (per‑example)
 
-scripts/model_smoke.py exercises both call_jsonl_strict and call_text (echo by default; real if flagged).
+summary.json (aggregates)
 
-tests/test_model_io.py verifies Echo behavior, JSONL dumping, and (optionally) a real call when opt‑in env is set.
+Supports resume, incremental writes, and is SIGINT‑safe (flushes buffers on Ctrl‑C).
 
-Export model_io in tersetalk/**init**.py.
+Slightly extend baselines to expose the free‑form prompt(s) so we can compute SP against compression:
 
-No network required for tests.
+run_llmlingua_once should include origin_prompt and compressed_prompt in its return payload (keep existing keys too).
 
-Create/Update the following files exactly
+If this change is not yet present from PR‑08, add it now.
 
-1. tersetalk/model_io.py (new)
-   from **future** import annotations
+Add a smoke test: tests/test_run_v05_smoke.py
 
+Runs scripts/run_v05.py with --task synth --system tersetalk --n 3 --model echo into a temp output dir.
+
+Asserts that config.json, raw_outputs.jsonl, and summary.json exist and are non‑empty.
+
+Does not require internet or GPUs.
+
+Requirements & Interfaces (must use)
+
+Repro: from tersetalk.reproducibility import set_global_seed
+
+Datasets: from tersetalk.datasets import load_hotpotqa, load_gsm8k
+
+Pipeline: from tersetalk.pipeline_runner import run_pipeline_once
+
+Baselines: from tersetalk.baselines import run_freeform_once, run_llmlingua_once
+
+Results: from tersetalk.results_manager import ResultsManager
+
+Metrics: from tersetalk.metrics import MetricsComputer
+
+(Optional for SP on manager messages) from tersetalk.protocol_jsonl import JSONLValidator and from tersetalk.memory import MemoryStore
+
+Model clients: from tersetalk.model_io import ModelClient, EchoModel
+
+CLI surface (match proposal + add synth + a few practical flags)
+python scripts/run_v05.py \
+  --task {hotpotqa,gsm8k,synth} \
+  --system {tersetalk,freeform,llmlingua} \
+  --n 100 --seed 0 \
+  --caps '{"f":30,"p":20,"q":30}' \
+  --model mistral \
+  --out results \
+  [--hybrid] [--token-budget 600] \
+  [--deref-policy {always,conditional,never}] \
+  [--summarizer {extractive,llmlingua,truncate}] \
+  [--preoverflow-ll2] [--overflow-ll2] [--deref-ll2] \
+  [--use-tiktoken] [--sp {auto,jaccard}] \
+  [--save-every 10] [--resume] [--verbose]
+
+
+Notes:
+
+--model echo must route to EchoModel() for GPU‑free CI.
+
+--sp auto tries BERTScore then falls back; --sp jaccard forces fallback.
+
+--resume reuses existing raw_outputs.jsonl to skip already completed indices.
+
+Design details
+
+Per‑example record (JSON line in raw_outputs.jsonl), minimally:
+
+{
+  "idx": 17,
+  "task": "hotpotqa",
+  "system": "tersetalk",
+  "seed": 0,
+  "question": "...",
+  "gold_answer": "...",
+  "pred_answer": "...",
+  "correct": true,
+  "tokens_total": 413,
+  "bytes_on_wire": 912,
+  "sp_score": 0.87,
+  "overflow_count": 2,
+  "latency_ms": {"manager":0,"worker":...,"critic":...},
+  "route": "tersetalk|freeform_llmlingua|na",
+  "aux": { "compression_ratio": 0.63, "notes": "optional small bag" }
+}
+
+
+Accuracy:
+
+hotpotqa → MetricsComputer.exact_match
+
+gsm8k → MetricsComputer.gsm8k_correct
+
+synth → treat like EM
+
+SP (semantic preservation): score the Manager→Worker transmission vs a reference “golden prose” of the manager’s intent.
+
+Build reference prose via JSONLValidator.jsonl_to_prose(manager_jsonl) using the un‑overflowed content (i.e., start from the unvalidated manager JSONL string you assemble from the example; see helper below).
+
+Candidate for systems:
+
+tersetalk: jsonl_to_prose(validated_jsonl) (after caps/overflow)
+
+freeform: the free‑form prompt itself (SP ≈ 1 vs reference prose built from the same content)
+
+llmlingua: compressed_prompt vs origin_prompt prose (use the origin prompt as the reference)
+
+Bytes‑on‑wire: use MetricsComputer.bytes_on_wire(<transmitted string>) for the exact string given to the next role (validated JSONL, free‑form prompt, or compressed prompt).
+
+Hybrid flags: pass through into the config dict you hand to run_pipeline_once so future PR‑H4 wiring can use them (no special handling needed in the driver beyond config plumbing).
+
+Files to add / update
+A) scripts/run_v05.py (new)
+
+Create the file with the following full content:
+
+from __future__ import annotations
+
+import csv
 import json
-import os
-from dataclasses import dataclass
-from typing import List, Optional
+import signal
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-import instructor
-from openai import OpenAI
-from pydantic import BaseModel # only for typing clarity in signatures
+import click
+from tqdm import tqdm
 
-from tersetalk.structured import TerseTalkLine
+from tersetalk.reproducibility import set_global_seed
+from tersetalk.results_manager import ResultsManager
+from tersetalk.metrics import MetricsComputer
+from tersetalk.model_io import ModelClient, EchoModel
+from tersetalk.baselines import run_freeform_once, run_llmlingua_once
+from tersetalk.pipeline_runner import run_pipeline_once
+from tersetalk.datasets import load_hotpotqa, load_gsm8k
 
-# ---------------------------
+# Optional (for SP ref/candidate prose of JSONL)
+from tersetalk.protocol_jsonl import JSONLValidator
+from tersetalk.memory import MemoryStore
 
-# Configuration & utilities
+# ----------------------------
+# Helpers for dataset handling
+# ----------------------------
 
-# ---------------------------
+def _load_examples(task: str, n: int, seed: int) -> List[Dict[str, Any]]:
+    if task == "hotpotqa":
+        return load_hotpotqa(split="validation", n=n, seed=seed)
+    if task == "gsm8k":
+        return load_gsm8k(split="test", n=n, seed=seed)
+    if task == "synth":
+        # Offline, tiny CI-friendly set
+        # Fields mimick our normalized example shape
+        data = []
+        base = [
+            {
+                "question": "What city is the Eiffel Tower in?",
+                "answer": "Paris",
+                "facts": ["Eiffel Tower is a landmark in Paris, France."],
+                "subgoal": "Answer the question concisely.",
+                "assumptions": ["Use common knowledge", "Return one word"]
+            },
+            {
+                "question": "Which number is larger: 7 or 3?",
+                "answer": "7",
+                "facts": ["7 > 3"],
+                "subgoal": "Compare numbers and answer.",
+                "assumptions": ["Use integers", "Be concise"]
+            },
+            {
+                "question": "2 + 2 = ?",
+                "answer": "4",
+                "facts": ["Basic arithmetic"],
+                "subgoal": "Compute a simple sum.",
+                "assumptions": ["Return a numeral"]
+            },
+        ]
+        # Ensure deterministic slice of N
+        for i in range(min(n, len(base))):
+            data.append(base[i])
+        return data
+    raise click.ClickException(f"Unknown task: {task}")
 
-@dataclass
-class ModelCfg:
-"""
-Minimal model client configuration. - base_url: OpenAI-compatible endpoint (Ollama recommended) - api_key: required by OpenAI client but ignored by local Ollama; default 'ollama' - model: model name available on the server (e.g., 'mistral' or 'mistral:instruct')
-"""
-base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-api_key: str = os.environ.get("OLLAMA_API_KEY", "ollama")
-model: str = os.environ.get("OLLAMA_MODEL", "mistral")
 
-def \_build_instructor_client(cfg: ModelCfg):
-"""
-Patch the OpenAI client with Instructor so response_model returns pydantic objects.
-"""
-raw = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
-return instructor.patch(raw)
+def _manager_jsonl_from_example(example: Dict[str, Any]) -> str:
+    """
+    Construct Manager→Worker message in TerseTalk JSONL style for SP reference.
+    Keep simple & consistent with earlier PRs (role 'M', subgoal, facts, question).
+    """
+    import json as _json
 
-def dump_jsonl(lines: List[TerseTalkLine]) -> str:
-"""
-Convert a list of TerseTalkLine into canonical JSONL strings:
-each line is ["<tag>", ...payload...]
-"""
-arrs = [ [ln.tag, *ln.payload] for ln in lines ]
-return "\n".join(json.dumps(a, ensure_ascii=False) for a in arrs)
+    lines = []
+    lines.append(["r", "M"])
+    if example.get("subgoal"):
+        lines.append(["g", str(example["subgoal"])[:512]])
+    for f in example.get("facts", [])[:10]:
+        lines.append(["f", str(f)[:2048]])
+    if example.get("assumptions"):
+        for a in example["assumptions"][:5]:
+            lines.append(["u", str(a)[:256]])
+    if example.get("question"):
+        lines.append(["q", "W", str(example["question"])[:2048]])
 
-# ---------------------------
+    return "\n".join(_json.dumps(x, ensure_ascii=False) for x in lines)
 
-# Model clients
 
-# ---------------------------
+def _jsonl_prose_pair(manager_jsonl: str, caps: Dict[str, int]) -> Tuple[str, str, Dict[str, Any], str]:
+    """
+    Returns (reference_prose, candidate_prose, overflow_stats, validated_jsonl)
+    - reference_prose: prose from original (pre-validation) JSONL
+    - candidate_prose: prose after caps/overflow
+    """
+    memory = MemoryStore()
+    validator = JSONLValidator(caps=caps, memory=memory)
+    ref_prose = validator.jsonl_to_prose(manager_jsonl)
+    validated_jsonl, of_stats = validator.validate_and_overflow(manager_jsonl)
+    cand_prose = validator.jsonl_to_prose(validated_jsonl)
+    memory.reset()
+    return ref_prose, cand_prose, of_stats, validated_jsonl
 
-class ModelClient:
-"""
-Real client that talks to an OpenAI-compatible endpoint (e.g., Ollama),
-guaranteeing structured outputs via Instructor+Pydantic.
-"""
 
-    def __init__(self, cfg: Optional[ModelCfg] = None):
-        self.cfg = cfg or ModelCfg()
-        self.client = _build_instructor_client(self.cfg)
-        self.model = self.cfg.model
+def _compute_quality(task: str, mc: MetricsComputer, pred: str, gold: str) -> bool:
+    if task == "gsm8k":
+        return mc.gsm8k_correct(pred, gold)
+    # hotpotqa and synth: EM normalization
+    return mc.exact_match(pred, gold)
 
-    # Structured (typed) JSONL output using Instructor
-    def call_jsonl_strict(
-        self,
-        system: str,
-        user_prompt: str,
-        max_tokens: int = 256,
-        retries: int = 2,
-    ) -> List[TerseTalkLine]:
-        """
-        Returns a list of TerseTalkLine objects parsed/validated by Instructor.
-        NOTE: Relies on the model cooperating with the instruction. Instructor
-        will retry/coerce within reason, then raise on failure.
-        """
-        result: List[TerseTalkLine] = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_model=List[TerseTalkLine],  # <-- magic: returns typed objects
-            max_retries=retries,
-            # Instructor forwards extra kwargs as needed; keep minimal for portability
-        )
-        return result
 
-    # Free-form text (baseline support)
-    def call_text(
-        self,
-        system: str,
-        user_prompt: str,
-        max_tokens: int = 512,
-    ) -> str:
-        """
-        Returns raw assistant text. Keep as a simple baseline utility.
-        """
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_prompt},
-            ],
-            max_tokens=max_tokens,
-        )
-        # When response_model is NOT used, Instructor returns a normal OpenAI object
-        try:
-            return (resp.choices[0].message.content or "").strip()
-        except Exception:
-            # Defensive fallback
-            return ""
+def _save_incremental(raw_path: Path, rows: List[Dict[str, Any]]) -> None:
+    if not rows:
+        return
+    with raw_path.open("a", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    rows.clear()
 
-class EchoModel(ModelClient):
-"""
-Offline deterministic client for CI. - call_jsonl_strict returns a fixed valid TerseTalk line. - call_text returns a simple echoed sentence.
-"""
 
-    def __init__(self, cfg: Optional[ModelCfg] = None):
-        # Do not initialize a real HTTP client in echo mode
-        self.cfg = cfg or ModelCfg()
-        self.client = None
-        self.model = "echo"
+def _write_metrics_csv(csv_path: Path, rows: Iterable[Dict[str, Any]]) -> None:
+    # Write/overwrite a small csv for convenience; minimal columns
+    fieldnames = [
+        "idx", "task", "system", "seed",
+        "correct", "tokens_total", "bytes_on_wire",
+        "sp_score", "overflow_count"
+    ]
+    with csv_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k) for k in fieldnames})
 
-    def call_jsonl_strict(
-        self,
-        system: str,
-        user_prompt: str,
-        max_tokens: int = 256,
-        retries: int = 2,
-    ) -> List[TerseTalkLine]:
-        return [TerseTalkLine(tag="g", payload=["This is an echoed goal."])]
 
-    def call_text(
-        self,
-        system: str,
-        user_prompt: str,
-        max_tokens: int = 512,
-    ) -> str:
-        return "ECHO: hello from EchoModel"
+def _summarize(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    import math
+    import statistics as stats
 
-2. scripts/model_smoke.py (new)
-   from **future** import annotations
+    if not rows:
+        return {}
+    n = len(rows)
+    bools = [bool(r.get("correct", False)) for r in rows]
+    toks = [int(r.get("tokens_total", 0)) for r in rows]
+    bows = [int(r.get("bytes_on_wire", 0)) for r in rows]
+    sps  = [float(r.get("sp_score")) for r in rows if r.get("sp_score") is not None]
+    ofs  = [int(r.get("overflow_count", 0)) for r in rows if r.get("overflow_count") is not None]
 
-import argparse
-import json
-import os
+    def safe_mean(xs):
+        return float(stats.mean(xs)) if xs else 0.0
+    def safe_median(xs):
+        return float(stats.median(xs)) if xs else 0.0
 
-from tersetalk.model_io import ModelClient, EchoModel, ModelCfg, dump_jsonl
-
-SYSTEM_JSONL = (
-"You output compact, typed JSONL lines for the TerseTalk protocol. "
-"Each line is an array: ['r'|'g'|'f'|'u'|'p'|'q'|'d'|'v'|'o'|'t'|'x', ...]. "
-"Return 2-4 lines that set a role and a short goal."
-)
-USER_JSONL = "Create a manager role and a concise subgoal about comparing two dates."
-
-SYSTEM_TEXT = "You are a concise assistant."
-USER_TEXT = "Say one short sentence about efficiency."
-
-def main():
-ap = argparse.ArgumentParser(description="PR-05: Model I/O smoke tool")
-ap.add_argument("--mode", choices=["echo", "real"], default=os.environ.get("MODEL_CLIENT", "echo"))
-ap.add_argument("--base-url", default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"))
-ap.add_argument("--model", default=os.environ.get("OLLAMA_MODEL", "mistral"))
-ap.add_argument("--api-key", default=os.environ.get("OLLAMA_API_KEY", "ollama"))
-args = ap.parse_args()
-
-    if args.mode == "real":
-        client = ModelClient(ModelCfg(base_url=args.base_url, api_key=args.api_key, model=args.model))
-    else:
-        client = EchoModel()
-
-    # Structured call
-    try:
-        lines = client.call_jsonl_strict(SYSTEM_JSONL, USER_JSONL, max_tokens=200)
-        jsonl = dump_jsonl(lines)
-    except Exception as e:
-        lines = []
-        jsonl = f"<error: {e}>"
-
-    # Free-form call
-    try:
-        text = client.call_text(SYSTEM_TEXT, USER_TEXT, max_tokens=50)
-    except Exception as e:
-        text = f"<error: {e}>"
-
-    out = {
-        "mode": args.mode,
-        "structured_lines": [ {"tag": ln.tag, "payload": ln.payload} for ln in lines ],
-        "structured_jsonl": jsonl,
-        "freeform_text": text,
+    return {
+        "num_examples": n,
+        "accuracy": sum(bools) / n,
+        "tokens_avg": safe_mean(toks),
+        "tokens_median": safe_median(toks),
+        "bytes_on_wire_avg": safe_mean(bows),
+        "sp_avg": safe_mean(sps),
+        "overflow_avg": safe_mean(ofs),
     }
-    print(json.dumps(out, indent=2))
 
-if **name** == "**main**":
-main()
 
-3. tests/test_model_io.py (new)
-   from **future** import annotations
+def _load_completed_indices(raw_path: Path) -> set[int]:
+    done = set()
+    if not raw_path.exists():
+        return done
+    with raw_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                obj = json.loads(line)
+                idx = int(obj.get("idx"))
+                done.add(idx)
+            except Exception:
+                continue
+    return done
 
-import os
 
-from tersetalk.model_io import EchoModel, ModelClient, ModelCfg, dump_jsonl
-from tersetalk.structured import TerseTalkLine
+# ----------------------------
+# Main CLI
+# ----------------------------
 
-def test_echo_jsonl_and_text_offline():
-client = EchoModel()
-lines = client.call_jsonl_strict("sys", "user")
-assert isinstance(lines, list) and len(lines) == 1
-assert isinstance(lines[0], TerseTalkLine)
-assert lines[0].tag == "g"
-assert isinstance(lines[0].payload, list)
+@click.command()
+@click.option('--task', type=click.Choice(['hotpotqa', 'gsm8k', 'synth']), required=True)
+@click.option('--system', type=click.Choice(['tersetalk', 'freeform', 'llmlingua']), required=True)
+@click.option('--n', default=100, show_default=True, help='Number of examples')
+@click.option('--seed', default=0, show_default=True, help='Random seed')
+@click.option('--caps', default='{"f":30,"p":20,"q":30}', show_default=True, help='Soft caps JSON for TerseTalk')
+@click.option('--model', default='mistral', show_default=True, help='Model name (use "echo" for CI)')
+@click.option('--out', default='results', show_default=True, help='Output base directory')
 
-    text = client.call_text("sys", "user")
-    assert text.startswith("ECHO:")
+# Hybrid / LLMLingua toggles (plumbed into config)
+@click.option('--hybrid', is_flag=True, default=False, help='Enable per-turn hybrid gate')
+@click.option('--token-budget', default=600, show_default=True, help='Token budget for hybrid/LL2')
+@click.option('--deref-policy', type=click.Choice(['always','conditional','never']), default='conditional', show_default=True)
+@click.option('--summarizer', type=click.Choice(['extractive','llmlingua','truncate']), default='extractive', show_default=True)
+@click.option('--preoverflow-ll2', is_flag=True, default=False, help='Use LLMLingua before overflow')
+@click.option('--overflow-ll2', is_flag=True, default=False, help='Use LLMLingua to produce overflow summary')
+@click.option('--deref-ll2', is_flag=True, default=False, help='Use LLMLingua on dereference contents')
 
-def test_dump_jsonl_helper_roundtrip():
-lines = [TerseTalkLine(tag="r", payload=["M"]),
-TerseTalkLine(tag="g", payload=["Compare two dates."])]
-s = dump_jsonl(lines) # Should contain both tags in order
-assert s.splitlines()[0].startswith('["r"')
-assert s.splitlines()[1].startswith('["g"')
+# Metrics/runtime options
+@click.option('--use-tiktoken', is_flag=True, default=False, help='Use exact token counting when available')
+@click.option('--sp', type=click.Choice(['auto','jaccard']), default='auto', show_default=True, help='Semantic preservation scoring')
+@click.option('--save-every', default=10, show_default=True, help='Flush raw outputs every K examples')
+@click.option('--resume', is_flag=True, default=False, help='Resume based on existing raw_outputs.jsonl')
+@click.option('--verbose', is_flag=True, default=False, help='Verbose logging to stdout')
+def main(task, system, n, seed, caps, model, out,
+         hybrid, token_budget, deref_policy, summarizer,
+         preoverflow_ll2, overflow_ll2, deref_ll2,
+         use_tiktoken, sp, save_every, resume, verbose):
 
-def test_real_call_optional_smoke():
-"""
-Optional: If RUN_REAL_OLLAMA=1, attempt a tiny real call.
-This is skipped in CI by default.
-"""
-if os.environ.get("RUN_REAL_OLLAMA") != "1":
-return
+    # Reproducibility config
+    model_cfg = set_global_seed(seed)
 
-    cfg = ModelCfg(
-        base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-        api_key=os.environ.get("OLLAMA_API_KEY", "ollama"),
-        model=os.environ.get("OLLAMA_MODEL", "mistral"),
-    )
-    client = ModelClient(cfg)
-    # Real model might or might not follow spec perfectly; Instructor will try.
-    lines = client.call_jsonl_strict(
-        "Output a single TerseTalk line with tag 'g' and a very short goal.",
-        "One short goal only.",
-        max_tokens=64,
-    )
-    assert isinstance(lines, list) and len(lines) >= 1
-    assert isinstance(lines[0], TerseTalkLine)
+    # Resolve run directory
+    results_mgr = ResultsManager(out)
+    experiment_id = f"{task}_{system}"
+    run_dir = results_mgr.get_run_dir(experiment_id, timestamp=True)
+    (run_dir / "figures").mkdir(parents=True, exist_ok=True)
 
-4. Update tersetalk/**init**.py (replace file)
-   from .\_version import **version**
+    # Compose config
+    try:
+        caps_dict = json.loads(caps)
+        assert isinstance(caps_dict, dict)
+    except Exception:
+        raise click.ClickException("--caps must be valid JSON mapping")
 
-**all** = [
-"__version__",
-"reproducibility",
-"protocol_jsonl",
-"structured",
-"memory",
-"summarization",
-"hybrid_gate",
-"noninferiority",
-"protocol_handler",
-"model_io",
-]
+    config = {
+        "task": task,
+        "system": system,
+        "n": n,
+        "seed": seed,
+        "caps": caps_dict,
+        "model": model,
+        "hybrid": hybrid,
+        "token_budget": int(token_budget),
+        "deref_policy": deref_policy,
+        "summarizer": summarizer,
+        "preoverflow_ll2": preoverflow_ll2,
+        "overflow_ll2": overflow_ll2,
+        "deref_ll2": deref_ll2,
+        "use_tiktoken": use_tiktoken,
+        "sp_mode": sp,
+        **model_cfg,
+    }
+    results_mgr.save_config(run_dir, config)
 
-What to run (and what to paste as evidence in the PR)
+    # Load dataset
+    examples = _load_examples(task, n, seed)
 
-Run tests (offline, Echo model)
+    # Create/choose model client
+    if model.strip().lower() == "echo":
+        client = EchoModel()
+    else:
+        client = ModelClient()
+        client.init(model_name=model)
 
-make test
+    # Initialize metrics computer
+    mc = MetricsComputer(use_tiktoken=use_tiktoken)
 
-Smoke (Echo mode, no network)
+    # Output file paths
+    raw_path = run_dir / "raw_outputs.jsonl"
+    csv_path = run_dir / "metrics.csv"
+    sum_path = run_dir / "summary.json"
 
-python scripts/model_smoke.py --mode echo
+    # Resume support
+    completed = _load_completed_indices(raw_path) if resume else set()
 
-Optional: Real Ollama smoke (manual, not CI)
+    # SIGINT-safe flushing
+    pending_rows: List[Dict[str, Any]] = []
+    all_rows: List[Dict[str, Any]] = []
 
-# Ensure: ollama serve (and model pulled, e.g., `ollama pull mistral`)
+    def flush():
+        _save_incremental(raw_path, pending_rows)
+        # Refresh aggregate CSV on every flush (lightweight)
+        _write_metrics_csv(csv_path, all_rows)
+        if verbose:
+            click.echo(f"[flush] saved {raw_path.name}, {csv_path.name}")
 
-RUN_REAL_OLLAMA=1 \
-OLLAMA_MODEL=mistral \
-OLLAMA_BASE_URL=http://localhost:11434/v1 \
-python scripts/model_smoke.py --mode real --model mistral --base-url http://localhost:11434/v1
+    def handle_sigint(signum, frame):
+        click.echo("\n[run_v05] Caught SIGINT, flushing buffers...")
+        flush()
+        sys.exit(130)
 
-Acceptance evidence to paste in the PR description:
+    signal.signal(signal.SIGINT, handle_sigint)
 
-✅ pytest summary (all green).
+    # Main loop
+    for idx, ex in enumerate(tqdm(examples, desc=f"Running {system} on {task}", unit="ex")):
+        if idx in completed:
+            continue
 
-✅ model_smoke.py --mode echo JSON showing structured_lines with a {"tag":"g",...} and freeform_text starting with "ECHO:".
+        question = str(ex.get("question", ""))
+        gold = str(ex.get("answer", ""))
 
-(Optional) A real‑endpoint smoke JSON showing non‑empty structured_lines and freeform_text when Ollama is running.
+        # Per-system execution + content for SP/bytes accounting
+        route_str = "na"
+        overflow_count = None
+        bytes_wire = 0
+        sp_score: Optional[float] = None
+        pred_answer = ""
+        tokens_total = 0
+        aux: Dict[str, Any] = {}
+
+        if system == "tersetalk":
+            # Run the coordinated pipeline
+            result = run_pipeline_once(ex, client, config)
+            pred_answer = str(result.get("answer", ""))
+            tokens_total = int(result.get("tokens_total", 0))
+            overflow_count = int(result.get("overflow_count", 0))
+            route_str = "tersetalk"
+
+            # For SP/bytes: reconstruct manager JSONL and validated JSONL
+            manager_jsonl = _manager_jsonl_from_example(ex)
+            ref_prose, cand_prose, of_stats, validated_jsonl = _jsonl_prose_pair(manager_jsonl, caps_dict)
+            bytes_wire = mc.bytes_on_wire(validated_jsonl)
+
+            # Semantic preservation
+            if sp == "jaccard":
+                sp_score = mc.jaccard_sp(ref_prose, cand_prose)
+            else:
+                sp_score = mc.bertscore_sp(ref_prose, cand_prose)
+
+            aux.update({
+                "overflow_rate_est": of_stats.get("rate", None),
+                "memory_stats_end": result.get("memory_stats", None),
+                "verdict": result.get("verdict", None),
+            })
+
+        elif system == "freeform":
+            b = run_freeform_once(ex, client)
+            pred_answer = str(b.get("answer", ""))
+            tokens_total = int(b.get("tokens", 0))
+            route_str = "freeform"
+
+            origin_prompt = b.get("origin_prompt") or b.get("prompt") or ""
+            bytes_wire = mc.bytes_on_wire(origin_prompt)
+
+            # SP: freeform prompt vs reference prose ≈ 1 since it's the uncompressed prose itself
+            manager_jsonl = _manager_jsonl_from_example(ex)
+            ref_prose, _, _, _ = _jsonl_prose_pair(manager_jsonl, caps_dict)
+            cand_prose = origin_prompt
+            if sp == "jaccard":
+                sp_score = mc.jaccard_sp(ref_prose, cand_prose)
+            else:
+                sp_score = mc.bertscore_sp(ref_prose, cand_prose)
+
+        else:  # llmlingua
+            b = run_llmlingua_once(ex, client)  # must return origin/compressed prompts
+            pred_answer = str(b.get("answer", ""))
+            tokens_total = int(b.get("tokens", 0))
+            route_str = "freeform_llmlingua"
+
+            origin_prompt = b.get("origin_prompt", "")
+            compressed_prompt = b.get("compressed_prompt", "")
+            bytes_wire = mc.bytes_on_wire(compressed_prompt or origin_prompt)
+
+            # SP: compressed vs origin prompt
+            if sp == "jaccard":
+                sp_score = mc.jaccard_sp(origin_prompt, compressed_prompt or origin_prompt)
+            else:
+                sp_score = mc.bertscore_sp(origin_prompt, compressed_prompt or origin_prompt)
+
+            aux.update({
+                "compression_ratio": b.get("compression_ratio"),
+            })
+
+        # Quality
+        correct = _compute_quality(task, mc, pred_answer, gold)
+
+        # Assemble record
+        row = {
+            "idx": idx,
+            "task": task,
+            "system": system,
+            "seed": seed,
+            "question": question,
+            "gold_answer": gold,
+            "pred_answer": pred_answer,
+            "correct": bool(correct),
+            "tokens_total": tokens_total,
+            "bytes_on_wire": bytes_wire,
+            "sp_score": sp_score,
+            "overflow_count": overflow_count,
+            "latency_ms": None,   # available in pipeline result if needed
+            "route": route_str,
+            "aux": aux or None,
+        }
+        pending_rows.append(row)
+        all_rows.append(row)
+
+        # periodic flush
+        if (idx + 1) % int(save_every) == 0:
+            flush()
+
+    # Final flush and summary
+    flush()
+    summary = _summarize(all_rows)
+    sum_path.write_text(json.dumps(summary, indent=2))
+    click.echo(json.dumps(summary, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+
+B) Patch tersetalk/baselines.py (extend LLMLingua return payload)
+
+If these keys are not already returned from PR‑08, add them now (non‑breaking):
+
+# In tersetalk/baselines.py, inside run_llmlingua_once(...)
+def run_llmlingua_once(example: dict, client) -> dict:
+    from llmlingua import PromptCompressor
+    compressor = PromptCompressor()
+
+    origin_prompt = build_freeform_prompt(example)  # ensure this helper exists; if not, add it
+    compressed = compressor.compress(origin_prompt, target_token=100)
+
+    compressed_prompt = compressed.get('compressed_prompt', '')
+    response = client.call(compressed_prompt)
+
+    return {
+        "answer": response,
+        "tokens": compressed.get('origin_tokens', 0),   # keep original fields
+        "compression_ratio": compressed.get('ratio', None),
+        # new fields for PR-11 SP/bytes:
+        "origin_prompt": origin_prompt,
+        "compressed_prompt": compressed_prompt,
+    }
+
+
+If build_freeform_prompt(example) is missing, also add a simple implementation in the same module:
+
+def build_freeform_prompt(example: dict) -> str:
+    parts = [
+        "Role: Manager",
+        f"Goal: {example.get('subgoal','')}",
+        f"Facts: {'; '.join(map(str, example.get('facts', [])))}",
+        f"Question: {example.get('question','')}",
+    ]
+    return "\n".join(parts)
+
+C) Test: tests/test_run_v05_smoke.py (new)
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+def test_run_v05_synth_echo(tmp_path: Path):
+    script = Path("scripts") / "run_v05.py"
+    assert script.exists(), "run_v05.py not found"
+
+    outdir = tmp_path / "results"
+    cmd = [
+        sys.executable, str(script),
+        "--task", "synth",
+        "--system", "tersetalk",
+        "--n", "3",
+        "--seed", "0",
+        "--model", "echo",
+        "--out", str(outdir),
+        "--save-every", "1",
+        "--sp", "jaccard",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+
+    # Find the single timestamped run directory
+    runs = list((outdir / "synth_tersetalk").glob("*"))
+    assert runs, "No run directory created"
+    # 'latest' symlink plus timestamp dir(s)
+    rundir = [p for p in runs if p.is_dir() and p.name != "latest"][0]
+
+    raw = rundir / "raw_outputs.jsonl"
+    cfg = rundir / "config.json"
+    summ = rundir / "summary.json"
+
+    assert cfg.exists() and cfg.read_text().strip(), "config missing/empty"
+    assert raw.exists() and raw.read_text().strip(), "raw_outputs.jsonl missing/empty"
+    assert summ.exists() and summ.read_text().strip(), "summary.json missing/empty"
+
+    # Summary should be valid JSON and contain num_examples
+    s = json.loads(summ.read_text())
+    assert "num_examples" in s and s["num_examples"] == 3
 
 Commit message
-PR-05: Model I/O via Instructor + Ollama (with EchoModel)
+PR-11: Experiment Driver (scripts/run_v05.py) + LLMLingua payloads + smoke test
 
-- Add tersetalk/model_io.py:
-  - ModelCfg and ModelClient using OpenAI SDK + Instructor
-  - call_jsonl_strict() → List[TerseTalkLine] (typed)
-  - call_text() → str (free-form baseline)
-  - EchoModel for offline deterministic CI
-  - dump_jsonl() helper for canonical JSONL output
-- Add scripts/model_smoke.py for quick local smoke (echo/real)
-- Add tests/test_model_io.py (offline by default; optional real smoke via RUN_REAL_OLLAMA=1)
-- Export model_io in package **init**
+- Add scripts/run_v05.py:
+  * CLI to run {tersetalk|freeform|llmlingua} on {hotpotqa|gsm8k|synth}
+  * Reproducibility via set_global_seed
+  * ResultsManager integration: config.json, raw_outputs.jsonl, metrics.csv, summary.json
+  * Per-example metrics: accuracy (EM/GSM8K), tokens, bytes-on-wire, SP (BERTScore→Jaccard), overflow counts
+  * Incremental saves, resume support, SIGINT-safe flush
+  * Hybrid/LL2 flags plumbed into config for future PR-H4
+- Extend baselines.run_llmlingua_once to return origin/compressed prompts (for SP + bytes)
+- Add tests/test_run_v05_smoke.py: EchoModel + synth task offline smoke
+
+Notes & rationale
+
+Synth task keeps CI offline and fast while exercising the same code paths.
+
+SP scoring follows the proposal’s spirit: measure semantic drift introduced by protocol caps/overflow vs a reference description. For LLMLingua, we explicitly compare compressed vs origin prompt.
+
+Bytes‑on‑wire and token counts are both reported to support systems metrics and Pareto plots later (PR‑12).
+
+Hybrid flags are collected but not used here (they will be consumed by PR‑H4 wiring).

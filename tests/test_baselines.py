@@ -48,7 +48,7 @@ def test_run_freeform_once_echo_is_deterministic(monkeypatch):
   ex = load_hotpotqa(n=1, seed=5)[0]
   client = EchoModel()
   r1 = run_freeform_once(ex, client)
-  r2 = run_freeform_once(ex, client)
+  r2 = run_freeform_once(ex, client, max_tokens=128)
   _shape_ok(r1)
   assert r1["answer"] == r2["answer"]
   assert r1["tokens_total"] == r2["tokens_total"]
@@ -63,4 +63,3 @@ def test_run_llmlingua_once_fallback_when_disabled(monkeypatch):
   client = EchoModel()
   r = run_llmlingua_once(ex, client, target_token=200)
   _shape_ok(r, expect_ll2=False)
-

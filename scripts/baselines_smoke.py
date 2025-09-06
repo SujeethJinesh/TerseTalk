@@ -16,6 +16,7 @@ def main():
   ap.add_argument("--offline", action="store_true")
   ap.add_argument("--model", choices=["echo", "real"], default="echo")
   ap.add_argument("--disable-ll2", action="store_true", help="Force disable LLMLingua via env")
+  ap.add_argument("--max-tokens", type=int, default=256, help="Max tokens for baseline generation")
   args = ap.parse_args()
 
   if args.disable_ll2:
@@ -38,11 +39,11 @@ def main():
     client = EchoModel()
 
   print("=== Free-form baseline ===")
-  res_free = run_freeform_once(ex, client)
+  res_free = run_freeform_once(ex, client, max_tokens=args.max_tokens)
   print(json.dumps(res_free, indent=2))
 
   print("\n=== Free-form + LLMLingua baseline ===")
-  res_ll2 = run_llmlingua_once(ex, client, target_token=200)
+  res_ll2 = run_llmlingua_once(ex, client, target_token=200, max_tokens=args.max_tokens)
   print(json.dumps(res_ll2, indent=2))
 
 
