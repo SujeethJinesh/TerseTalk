@@ -1,0 +1,30 @@
+TerseTalk – Follow‑up TODOs (not explicitly covered in RESEARCH_PROPOSAL.md)
+
+Context: These are small, high‑leverage improvements that harden UX and testing
+around the current pipeline/baselines without changing research scope.
+
+1) PR‑08S — Smoke CLIs: model selector
+   - Add --model=echo|real to scripts/pipeline_smoke.py and scripts/baselines_smoke.py.
+   - Default to echo (offline‑safe); real path uses ModelClient.
+   - Tests: CLI parses flags; real path skipped unless RUN_REAL_MODEL=1.
+
+2) PR‑09R — Pipeline robustness to model schema failures
+   - Wrap Worker/Critic structured calls in try/except inside run_pipeline_once.
+   - Record failure fields (e.g., {"worker_error": str, "critic_error": str, "status": "error"}).
+   - Ensure memory reset still occurs; density/overflow still computed from manager message.
+   - Tests: simulate Instructor exceptions; verify non‑crash + fields present.
+
+3) PR‑09T — Optional tokenizer (tiktoken) for token counts
+   - Import‑guarded tiktoken support; fallback to len/4 heuristic.
+   - Tests: when absent → heuristic path; when present → counts are non‑negative and consistent.
+
+4) PR‑08B — Baselines knobs & minor nits
+   - Parameterize max_tokens in run_freeform_once/run_llmlingua_once; surface via smoke CLI.
+   - Add brief comment in build_freeform_prompt explaining lone "Question:" line retention.
+   - Tests: determinism unchanged with default params; schema intact.
+
+5) PR‑UX — Unified real‑run toggles & env docs
+   - Consolidate RUN_REAL_MODEL, TERSETALK_OFFLINE_DATA, RUN_REAL_DATASETS, TERSETALK_DISABLE_LL2 docs.
+   - Quick section in README/AGENTS for real‑run setup (Ollama/OpenAI), without making network required.
+
+Note: The evaluation harness and accuracy metrics are planned in RESEARCH_PROPOSAL.md; not tracked here.

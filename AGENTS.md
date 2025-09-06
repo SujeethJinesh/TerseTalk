@@ -67,6 +67,12 @@
   - Evidence: pytest all green; smoke shows loose caps (density≈1.0, low overflow) vs tight caps (lower density, higher overflow).
   - Summary: Echo model yields deterministic outputs; manager message density drops as caps tighten; tokens_total and latency_ms reported.
 
+- PR‑08 — Baselines (Free‑form & Free‑form+LLMLingua):
+  - Adds `tersetalk/baselines.py` with `build_freeform_prompt`, `approx_token_count`, `run_freeform_once`, and `run_llmlingua_once` (import‑guarded, env `TERSETALK_DISABLE_LL2=1` to force fallback in CI).
+  - Adds `scripts/baselines_smoke.py` and `tests/test_baselines.py` (prompt content, schema checks, deterministic Echo, and LLMLingua disabled fallback).
+  - Evidence: pytest all green; offline smoke prints both baselines. With LL2 disabled: `used_llmlingua=false` and compression fields are null.
+  - Summary: Baselines return comparable token metrics and are offline‑safe; ready for head‑to‑head with pipeline in future PRs.
+
 - PR‑06 — Dataset Adapters (HotpotQA & GSM8K):
   - Adds `tersetalk/datasets.py` with `load_hotpotqa()` and `load_gsm8k()` returning normalized examples: {question, answer, facts, subgoal, assumptions}. Deterministic sampling by seed; offline‑first synthetic shards controlled by `TERSETALK_OFFLINE_DATA=1`.
   - Adds `scripts/datasets_smoke.py` and `tests/test_datasets.py` (determinism, schema, offline behavior; optional real smoke via `RUN_REAL_DATASETS=1`).

@@ -204,7 +204,7 @@ You must ensure that code you review follows the above principles
 - Check `@tests/test_datasets.py` covers determinism, schema, and offline behavior; optional real smoke gated by `RUN_REAL_DATASETS=1`.
 - Smoke: `@scripts/datasets_smoke.py` prints two samples per task with `offline` flag; include JSON in PR description.
 - If fully acceptable, end with exactly: `Approved: no nits.`
-- For PR-07 — Pipeline Runner (Manager→Worker→Critic)
+### For PR-07 — Pipeline Runner (Manager→Worker→Critic)
 
 - Validate `@tersetalk/pipeline_runner.py` provides:
   - `PipelineConfig`, `build_manager_message`, `prepare_critic_input`, `extract_answer`, `extract_verdict`, `run_pipeline_once`, `run_pipeline_batch`.
@@ -213,4 +213,14 @@ You must ensure that code you review follows the above principles
 - Check `@tests/test_pipeline_runner.py` covers schema and density behavior (loose vs tight caps) and determinism with Echo model + synthetic data.
 - Smoke: `@scripts/pipeline_smoke.py` prints one result JSON for Echo + synthetic tasks; include loose vs tight caps snippets in PR body.
 - Ensure reference to `@RESEARCH_PROPOSAL.md` (pipeline section) guides the review for alignment and scope.
+- If fully acceptable, end with exactly: `Approved: no nits.`
+
+### For PR-08 — Baselines (Free‑form & LLMLingua)
+
+- Validate `@tersetalk/baselines.py` provides:
+  - `build_freeform_prompt`, `approx_token_count`, `run_freeform_once`, `run_llmlingua_once`.
+  - LLMLingua path import‑guarded; honors `TERSETALK_DISABLE_LL2=1` to force fallback in CI.
+  - Returns dict with: answer, prompt, response, prompt_tokens, response_tokens, tokens_total, used_llmlingua, origin_tokens, compressed_tokens, compression_ratio.
+- Check `@tests/test_baselines.py` covers prompt content, schema, deterministic Echo, and LL2 disabled fallback.
+- Smoke: `@scripts/baselines_smoke.py` prints both baselines; include JSON snippets in PR body. Ensure review is aligned with @RESEARCH_PROPOSAL.md.
 - If fully acceptable, end with exactly: `Approved: no nits.`
