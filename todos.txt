@@ -59,3 +59,17 @@ Note: The evaluation harness and accuracy metrics are planned in RESEARCH_PROPOS
 11) PR‑CI — Headless plots in CI
     - Add a minimal GH Action that runs pytest (matplotlib Agg) and archives figures from the smoke run.
     - Ensure caching and timeouts are conservative.
+
+<We have incorporated all of the above into our research proposal>
+
+12) PR‑14R — Per‑role model selection for agents (Worker/Critic) + timeouts
+   - Motivation (evidence): Our quick real runs used Ollama `phi:latest` because `llama3.1:8b` stalled within harness timeouts. Accuracy was low on free‑form with small models. Enabling a stronger or different model for the Critic (and/or Worker) can improve end quality without changing the Manager path.
+   - Ollama supports independent request contexts, so we can keep Ollama and still run logically independent agents. What we lack is per‑role model configuration.
+   - Changes:
+     * Add optional flags to the eval driver: `--worker-model`, `--critic-model` (default to `OLLAMA_MODEL`).
+     * Allow distinct `ModelClient` instances per role; wire through `PipelineConfig` or runner parameters.
+     * Add per‑role request timeouts configurable via CLI/env to mitigate long TTFT for larger models (e.g., llama3.1:8b).
+   - Acceptance:
+     * Dry-run unchanged; Echo path unaffected.
+     * With `--worker-model=llama3.1:8b --critic-model=codellama:13b-instruct` on Ollama, TerseTalk pipeline completes n=2–3 samples within extended timeout and produces summary.json.
+     * Document in AGENTS.md that multiple agent roles can target different models via Ollama; no switch to llama.cpp required unless we need process-level control.
