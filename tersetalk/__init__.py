@@ -14,4 +14,6 @@ __all__ = [
   "datasets",
   "pipeline_runner",
   "baselines",
+  "results_manager",
 ]
+from .results_manager import ResultsManager  # noqa: F401

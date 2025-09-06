@@ -73,6 +73,12 @@
   - Evidence: pytest all green; offline smoke prints both baselines. With LL2 disabled: `used_llmlingua=false` and compression fields are null.
   - Summary: Baselines return comparable token metrics and are offline‑safe; ready for head‑to‑head with pipeline in future PRs.
 
+## Real Runs & Analysis (ongoing discipline)
+
+- For every PR, include a small real‑run snippet (opt‑in via `RUN_REAL_MODEL=1`) for baselines and, when robust, the pipeline. Report: tokens, latency, and brief qualitative accuracy (e.g., EM snippet or numeric correctness on GSM8K item).
+- Provide a sober analysis vs figures of merit (e.g., token reduction targets, failure rate, density), call out limitations (heuristic tokens, randomness), and avoid overstated claims.
+- If real runs are blocked (e.g., model schema/tooling), document the root cause and the follow‑up PR fixing it.
+
 - PR‑06 — Dataset Adapters (HotpotQA & GSM8K):
   - Adds `tersetalk/datasets.py` with `load_hotpotqa()` and `load_gsm8k()` returning normalized examples: {question, answer, facts, subgoal, assumptions}. Deterministic sampling by seed; offline‑first synthetic shards controlled by `TERSETALK_OFFLINE_DATA=1`.
   - Adds `scripts/datasets_smoke.py` and `tests/test_datasets.py` (determinism, schema, offline behavior; optional real smoke via `RUN_REAL_DATASETS=1`).
