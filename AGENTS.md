@@ -384,3 +384,9 @@ You are writing code to test the minimal viable research proposal.
 - Summary: Adds `scripts/analyze_v05.py` to aggregate PR‑11 run outputs into `by_run.csv`, per‑task Pareto figures and points CSVs, plus an optional caps ablation plot. Headless Matplotlib; stdlib + numpy + matplotlib only.
 - Evidence: local pytest smoke passes (`tests/test_analyze_v05_smoke.py` creates synth results via Echo and generates `pareto_synth.pdf` and `by_run.csv`).
 - Next: Expand usage on HotpotQA/GSM8K shards and integrate figures into reports; consider adding SP vs bytes plot in a later PR.
+
+
+- PR-15 — Analysis Polish & Provenance:
+  - Summary: Upgrades `scripts/analyze_v05.py` with tree-wide Pareto CSV+PDF, deterministic cap ablations from filename-parsed caps, and provenance enrichment (tokens_method, sp_method, timestamp, git hash). Headless; stdlib+numpy+matplotlib only; keeps prior outputs for back-compat.
+  - Evidence: pytest green; new smoke test `tests/test_analyze_min.py` creates a tiny faux run and the tool emits `pareto_points.csv` + `pareto_frontier.pdf`. Compatible with PR‑14 outputs (e.g., `tersetalk_f*_p*_q*.jsonl`).
+  - Next: Run on latest Ollama runs (phi, llama3.1:8b) and attach figures to PRs.
