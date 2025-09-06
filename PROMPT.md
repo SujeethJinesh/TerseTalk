@@ -1,449 +1,343 @@
-Read through your AGENTS.md and ensure you follow that precisely. Make sure you fully understand and have read through the updated RESEARCH_PROPOSAL.md. First verify, which branch we're on and return to the main branch if we're not there. Ensure you pull the latest main branch before branching off for the rest of the PR. I want you to implement a PR of the RESEARCH_PROPOSAL.md on a new branch and create a PR for it with a very good review using yourself, claude code, and yourself again of course as mentioned in the AGENTS.md. Ensure you're aligned with the spirit of the proposal. Then send a PR out so I can review it after your implementation is pushed up. If you run into any major roadblocks, let me know and be detailed. Also update your AGENTS.md and CLAUDE.md to ensure that when you are asking for a review from CLAUDE, to refer to the RESEARCH_PROPOSAL.md and ensure you review it in the spirit of that as well. It's imperative that we always keep the RESEARCH_PROPOSAL.md up to date. You must provide a very small summary of the results after the PR was checked in (update AGENTS.md and ask CLAUDE.md to review that as well every PR). This way when a new session starts, it is easy to get back up to speed on the latest work that needs to be done. Please also ensure you use the .venv created at all times. Ensure that if you are debugging failures or such and need to create additional scripts, that you clean them up afterwards. It's incredibly important that you keep the code clean and minimal. We want it to do the job correctly. Before you merge the PR, you must wait for my approval. Also at the end I want you to outline any risks we are seeing in this project, are our expectations aligned with how the progress is going? Will our project succeed and achieve the baselines we expect using your best judgement? Absolutely make sure you're reporting results truthfully and honestly. Avoid fake, mocked, or other non genuine results. You should also analyze the results we get for each run and determine if they meet our figures of merit, when you report back, it's crucial to include that analysis (e.g. compression amount, failure rate, latency, etc.). We should be aiming to properly fix things and run proper evaluations. Here are more detailed instructions for PR implementation.
+Read through your AGENTS.md and ensure you follow that precisely. Make sure you fully understand and have read through the updated RESEARCH_PROPOSAL.md. First verify, which branch we're on and return to the main branch if we're not there. Ensure you pull the latest main branch before branching off for the rest of the PR. I want you to implement a PR of the RESEARCH_PROPOSAL.md on a new branch and create a PR for it with a very good review using yourself, claude code, and yourself again of course as mentioned in the AGENTS.md. Ensure you're aligned with the spirit of the proposal. Then send a PR out so I can review it after your implementation is pushed up. If you run into any major roadblocks, let me know and be detailed. Also update your AGENTS.md and CLAUDE.md to ensure that when you are asking for a review from CLAUDE, to refer to the RESEARCH_PROPOSAL.md and ensure you review it in the spirit of that as well. It's imperative that we always keep the RESEARCH_PROPOSAL.md up to date. You must provide a very small summary of the results after the PR was checked in (update AGENTS.md and ask CLAUDE.md to review that as well every PR). This way when a new session starts, it is easy to get back up to speed on the latest work that needs to be done. Please also ensure you use the .venv created at all times. Ensure that if you are debugging failures or such and need to create additional scripts, that you clean them up afterwards. It's incredibly important that you keep the code clean and minimal. We want it to do the job correctly. Before you merge the PR, you must wait for my approval. Also at the end I want you to outline any risks we are seeing in this project, are our expectations aligned with how the progress is going? Will our project succeed and achieve the baselines we expect using your best judgement? Absolutely make sure you're reporting results truthfully and honestly. Avoid fake, mocked, or other non genuine results. You should also analyze the results we get for each run and determine if they meet our figures of merit, when you report back, it's crucial to include that analysis (e.g. compression amount, failure rate, latency, etc.). We should be aiming to properly fix things and run proper evaluations. If we do have any expected goals or outcomes (e.g. >= 10x on xyz) and they aren't achieved, then explain why, but do not lie or cheat and use drastically contrived inefficient metrics. It's important to generally be comparing to a standard implementation. Here are more detailed instructions for PR implementation.
 
 ### PR Summary
 
-PR‑MB — Microbenchmarks
+PR‑05 — model_io.py + smoke + tests
 
-Role: You are a senior engineer implementing the microbenchmark suite after PR‑H4 merged.
+Role: You are a senior engineer implementing PR‑05 immediately after PR‑MB merged.
 
-Goals (from spec):
+Goal (from spec):
+Provide a clean ModelClient that can:
 
-Provide measurable “10× somewhere” via MB‑1.
+call_jsonl_strict(...) → List[TerseTalkLine] using Instructor to guarantee schema‑valid outputs (Pydantic from PR‑02S).
 
-Provide ≥5× speedup in MB‑2.
+call_text(...) → str for free‑form prompts (used by baselines later).
 
-Report bytes‑on‑wire & SerDe timings in MB‑3 (no strict ratio requirement), keeping optional formats import‑guarded.
+Ship an EchoModel for deterministic, offline CI.
+
+Include helpers to dump JSONL strings from typed lines.
 
 Constraints:
 
-No network. No extra deps required. (simdjson, msgpack, protobuf may be measured if present but must be optional and import‑guarded.)
+Use OpenAI Python SDK + Instructor patched client, pointing at an Ollama OpenAI‑compatible base URL (default http://localhost:11434/v1).
 
-Benchmarks must finish in seconds on CI; use parameterized sizes and a fast mode.
+Tests must pass offline using EchoModel.
 
-Tests must be deterministic and succeed on modest CI hardware.
+Real endpoint smoke is optional and guarded by an env var (no CI dependency).
 
-Deliverables:
+Keep prior tests green.
 
-benchmarks/tag_extraction.py — MB‑1 implementation
+DoD (Definition of Done):
 
-benchmarks/streaming_boundaries.py — MB‑2 implementation
+tersetalk/model_io.py implements ModelClient, EchoModel, and JSONL helpers.
 
-benchmarks/serde_bytes.py — MB‑3 implementation (optional formats guarded)
+scripts/model_smoke.py exercises both call_jsonl_strict and call_text (echo by default; real if flagged).
 
-benchmarks/run_all.py — CLI runner that prints a JSON summary (fast by default)
+tests/test_model_io.py verifies Echo behavior, JSONL dumping, and (optionally) a real call when opt‑in env is set.
 
-benchmarks/**init**.py — empty file to make it a package
+Export model_io in tersetalk/**init**.py.
 
-tests/test_benchmarks.py — asserts MB‑1 ≥10× and MB‑2 ≥5× on reduced sizes; checks MB‑3 byte ratio
+No network required for tests.
 
-(Optional nicety) scripts/benchmarks_run_all.py — thin wrapper to run the suite with CLI flags
+Create/Update the following files exactly
 
-Create/Update these files exactly
-
-1. benchmarks/**init**.py (new)
-
-# Package marker for benchmarks
-
-2. benchmarks/tag_extraction.py (new)
+1. tersetalk/model_io.py (new)
    from **future** import annotations
 
 import json
-import random
-import re
-import time
-from typing import Dict, List, Tuple
+import os
+from dataclasses import dataclass
+from typing import List, Optional
 
-TAGS = ["f", "g", "p", "u", "q"] # fact, goal, plan, assumption, question
-WORDS = (
-"alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi "
-"omicron pi rho sigma tau upsilon phi chi psi omega"
-).split()
+import instructor
+from openai import OpenAI
+from pydantic import BaseModel # only for typing clarity in signatures
 
-def _rand_words(rng: random.Random, lo: int, hi: int) -> str:
-n = rng.randint(lo, hi)
-return " ".join(rng.choice(WORDS) for _ in range(n))
+from tersetalk.structured import TerseTalkLine
 
-def make_corpora(n: int = 40_000, seed: int = 0) -> Tuple[List[str], List[str]]:
+# ---------------------------
+
+# Configuration & utilities
+
+# ---------------------------
+
+@dataclass
+class ModelCfg:
 """
-Build parallel corpora: - jsonl_lines: canonical array form, e.g., ["f","..."] or ["q","W","...?"] - free_lines: free-form English with labeled fields like `fact: ...;`
+Minimal model client configuration. - base_url: OpenAI-compatible endpoint (Ollama recommended) - api_key: required by OpenAI client but ignored by local Ollama; default 'ollama' - model: model name available on the server (e.g., 'mistral' or 'mistral:instruct')
 """
-rng = random.Random(seed)
-jsonl_lines: List[str] = []
-free_lines: List[str] = []
+base_url: str = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+api_key: str = os.environ.get("OLLAMA_API_KEY", "ollama")
+model: str = os.environ.get("OLLAMA_MODEL", "mistral")
 
-    for i in range(n):
-        tag = rng.choice(TAGS)
-        if tag == "q":
-            text = _rand_words(rng, 10, 28)
-            jsonl_lines.append(json.dumps(["q", "W", text]))
-            free_lines.append(f"role: manager; question: {text}; please answer.")
-        else:
-            text = _rand_words(rng, 12, 24)
-            jsonl_lines.append(json.dumps([tag, text]))
-            # Expand to increase regex work vs. typed JSONL first-char path
-            name = {
-                "f": "fact",
-                "g": "goal",
-                "p": "plan",
-                "u": "assumption",
-            }[tag]
-            free_lines.append(f"{name}: {text}; notes: {_rand_words(rng, 5, 12)}.")
-
-    return jsonl_lines, free_lines
-
-# ---- Extraction methods ----
-
-def extract_tag_jsonl_fast(line: str) -> str | None:
+def \_build_instructor_client(cfg: ModelCfg):
 """
-Fast-path tag extraction for canonical JSONL array form:
-line like ["f","text"] or ["q","W","text"] → tag is the 2nd char after leading [".
-Falls back to json.loads on mismatch.
+Patch the OpenAI client with Instructor so response_model returns pydantic objects.
 """
-s = line.lstrip() # common canonical: ["x",...
-if len(s) >= 4 and s[0] == "[" and s[1] == '"' and s[3] == '"':
-return s[2]
-try:
-arr = json.loads(s)
-return arr[0] if isinstance(arr, list) and arr else None
-except Exception:
-return None
+raw = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
+return instructor.patch(raw)
 
-# compiled once (realistic baseline)
-
-COMPILED = re.compile(
-r"\b(?P<tag>fact|goal|plan|assumption|question)\b\s*:\s*",
-re.IGNORECASE,
-)
-
-def extract_tag_freeform_compiled(line: str) -> str | None:
-m = COMPILED.search(line)
-if not m:
-return None
-t = m.group("tag").lower()
-return t[0] if t else None
-
-def extract_tag_freeform_uncompiled(line: str) -> str | None:
+def dump_jsonl(lines: List[TerseTalkLine]) -> str:
 """
-Intentionally heavier baseline (naive code path seen in many prototypes):
-recompiles the regex per call. This is the 'worst practice' baseline.
+Convert a list of TerseTalkLine into canonical JSONL strings:
+each line is ["<tag>", ...payload...]
 """
-m = re.search(
-r"\b(?P<tag>fact|goal|plan|assumption|question)\b\s*:\s*",
-line,
-re.IGNORECASE,
-)
-if not m:
-return None
-t = m.group("tag").lower()
-return t[0] if t else None
+arrs = [ [ln.tag, *ln.payload] for ln in lines ]
+return "\n".join(json.dumps(a, ensure_ascii=False) for a in arrs)
 
-def \_timeit(fn, data: List[str]) -> float:
-start = time.perf_counter()
-sink = 0
-for x in data:
-t = fn(x) # cheap sink to avoid dead-code elimination
-sink += 1 if t else 0
-end = time.perf_counter() # small anti-optim variable read
-if sink < 0:
-print("impossible", sink)
-return end - start
+# ---------------------------
 
-def benchmark_tag_extraction(n: int = 40_000, seed: int = 0) -> Dict:
-jsonl_lines, free_lines = make_corpora(n=n, seed=seed)
+# Model clients
 
-    t_jsonl = _timeit(extract_tag_jsonl_fast, jsonl_lines)
-    t_free_compiled = _timeit(extract_tag_freeform_compiled, free_lines)
-    t_free_uncompiled = _timeit(extract_tag_freeform_uncompiled, free_lines)
+# ---------------------------
 
-    return {
-        "n": n,
-        "jsonl_seconds": t_jsonl,
-        "freeform_compiled_seconds": t_free_compiled,
-        "freeform_uncompiled_seconds": t_free_uncompiled,
-        "speedup_vs_compiled": (t_free_compiled / t_jsonl) if t_jsonl > 0 else float("inf"),
-        "speedup_vs_uncompiled": (t_free_uncompiled / t_jsonl) if t_jsonl > 0 else float("inf"),
-    }
-
-3. benchmarks/streaming_boundaries.py (new)
-   from **future** import annotations
-
-import random
-import re
-import time
-from typing import Dict, Tuple, List
-
-from .tag_extraction import WORDS, TAGS, \_rand_words
-
-def make_streams(n_msgs: int = 40_000, seed: int = 0) -> Tuple[str, str]:
+class ModelClient:
 """
-Build two streams of concatenated messages: - jsonl_stream: one JSON value per line (O(1) boundary detection) - free_stream: multi-sentence prose with punctuation, abbreviations
+Real client that talks to an OpenAI-compatible endpoint (e.g., Ollama),
+guaranteeing structured outputs via Instructor+Pydantic.
 """
-rng = random.Random(seed) # JSONL stream: a variety of short lines (reuse from tag gen)
-jsonl_lines: List[str] = []
-for i in range(n_msgs):
-tag = rng.choice(TAGS)
-if tag == "q":
-text = \_rand_words(rng, 8, 18)
-jsonl_lines.append(f'["q","W","{text}"]')
-else:
-text = \_rand_words(rng, 8, 18)
-jsonl_lines.append(f'["{tag}","{text}"]')
-jsonl_stream = "\n".join(jsonl_lines)
 
-    # Free-form stream: approximate sentence boundaries with tricky cases
-    abbrs = ["e.g.", "i.e.", "Dr.", "Mr.", "Ms.", "vs."]
-    sentences: List[str] = []
-    for i in range(n_msgs):
-        s1 = f"{_rand_words(rng, 5, 12)}."
-        s2 = f"{rng.choice(abbrs)} {_rand_words(rng, 4, 9)}."
-        s3 = f"{_rand_words(rng, 4, 9)}?"
-        s4 = f"{_rand_words(rng, 4, 9)}!"
-        sentences.append(" ".join([s1, s2, s3, s4]))
-    free_stream = " ".join(sentences)
-    return jsonl_stream, free_stream
+    def __init__(self, cfg: Optional[ModelCfg] = None):
+        self.cfg = cfg or ModelCfg()
+        self.client = _build_instructor_client(self.cfg)
+        self.model = self.cfg.model
 
-# JSONL O(1) boundary detector: scan for '\n'
+    # Structured (typed) JSONL output using Instructor
+    def call_jsonl_strict(
+        self,
+        system: str,
+        user_prompt: str,
+        max_tokens: int = 256,
+        retries: int = 2,
+    ) -> List[TerseTalkLine]:
+        """
+        Returns a list of TerseTalkLine objects parsed/validated by Instructor.
+        NOTE: Relies on the model cooperating with the instruction. Instructor
+        will retry/coerce within reason, then raise on failure.
+        """
+        result: List[TerseTalkLine] = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_model=List[TerseTalkLine],  # <-- magic: returns typed objects
+            max_retries=retries,
+            # Instructor forwards extra kwargs as needed; keep minimal for portability
+        )
+        return result
 
-def count_jsonl_boundaries(stream: str) -> int:
-if not stream:
-return 0
-cnt = 0
-pos = 0
-while True:
-i = stream.find("\n", pos)
-if i == -1:
-break
-cnt += 1
-pos = i + 1 # last line (if not ending with newline)
-if stream[-1] != "\n":
-cnt += 1
-return cnt
+    # Free-form text (baseline support)
+    def call_text(
+        self,
+        system: str,
+        user_prompt: str,
+        max_tokens: int = 512,
+    ) -> str:
+        """
+        Returns raw assistant text. Keep as a simple baseline utility.
+        """
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_tokens=max_tokens,
+        )
+        # When response_model is NOT used, Instructor returns a normal OpenAI object
+        try:
+            return (resp.choices[0].message.content or "").strip()
+        except Exception:
+            # Defensive fallback
+            return ""
 
-# Free-form sentence boundary with heuristic regex (heavy)
-
-BOUNDARY_RE = re.compile(
-r'(?<!\b(?:e\.g|i\.e|mr|mrs|ms|dr|vs))' # negative lookbehind on common abbrev
-r'(?<=[.!?])\s+' # end punctuation + space
-r'(?=["\(\[]?[A-Z0-9])', # next sentence starts with capital/number
-re.IGNORECASE
-)
-
-def count_freeform_sentences(stream: str) -> int: # Count matches as boundaries; add 1 for the last fragment
-if not stream:
-return 0
-return len(BOUNDARY_RE.findall(stream)) + 1
-
-def \_timeit(fn, arg: str) -> float:
-start = time.perf_counter()
-val = fn(arg)
-end = time.perf_counter() # lightweight sink
-if val < 0:
-print("impossible", val)
-return end - start
-
-def benchmark_streaming(n_msgs: int = 40_000, seed: int = 0) -> Dict:
-j_stream, f_stream = make_streams(n_msgs=n_msgs, seed=seed)
-t_jsonl = \_timeit(count_jsonl_boundaries, j_stream)
-t_free = \_timeit(count_freeform_sentences, f_stream)
-return {
-"n_msgs": n_msgs,
-"jsonl_seconds": t_jsonl,
-"freeform_seconds": t_free,
-"speedup": (t_free / t_jsonl) if t_jsonl > 0 else float("inf"),
-}
-
-4. benchmarks/serde_bytes.py (new)
-   from **future** import annotations
-
-import json
-import random
-import time
-from typing import Dict, List, Tuple, Any
-
-from .tag_extraction import WORDS, \_rand_words
-
-def make_messages(n: int = 5_000, seed: int = 0) -> List[Dict[str, Any]]:
-rng = random.Random(seed)
-msgs = []
-for i in range(n):
-goal = f"Compare values; case {i}."
-facts = [_rand_words(rng, 8, 16), _rand_words(rng, 6, 12)]
-if i % 4 == 0:
-facts.append(\_rand_words(rng, 6, 12))
-q = "Which is earlier?"
-msgs.append({"role": "M", "goal": goal, "facts": facts, "q_to": "W", "question": q})
-return msgs
-
-def serialize_jsonl(msgs: List[Dict[str, Any]]) -> str:
-lines: List[str] = []
-for m in msgs:
-lines.append(json.dumps(["r", m["role"]]))
-lines.append(json.dumps(["g", m["goal"]]))
-for f in m["facts"]:
-lines.append(json.dumps(["f", f]))
-lines.append(json.dumps(["q", m["q_to"], m["question"]]))
-return "\n".join(lines)
-
-def serialize_freeform(msgs: List[Dict[str, Any]]) -> str:
-parts: List[str] = []
-for m in msgs:
-parts.append(f"Role: {m['role']}\n")
-parts.append(f"Goal: {m['goal']}\n")
-for f in m["facts"]:
-parts.append(f"Fact: {f}\n")
-parts.append(f"Question({m['q_to']}): {m['question']}\n")
-parts.append("\n")
-return "".join(parts)
-
-def maybe_msgpack(msgs: List[Dict[str, Any]]) -> Tuple[bool, bytes, float]:
-try:
-import msgpack # type: ignore
-except Exception:
-return False, b"", 0.0
-start = time.perf_counter()
-blob = msgpack.packb(msgs, use_bin_type=True)
-t = time.perf_counter() - start
-return True, blob, t
-
-def maybe_protobuf(msgs: List[Dict[str, Any]]) -> Tuple[bool, bytes, float]:
+class EchoModel(ModelClient):
 """
-Guarded placeholder: skip real schema to keep PR dependency-free.
+Offline deterministic client for CI. - call_jsonl_strict returns a fixed valid TerseTalk line. - call_text returns a simple echoed sentence.
 """
-return False, b"", 0.0
 
-def benchmark_serde_bytes(n: int = 5_000, seed: int = 0) -> Dict:
-msgs = make_messages(n=n, seed=seed)
+    def __init__(self, cfg: Optional[ModelCfg] = None):
+        # Do not initialize a real HTTP client in echo mode
+        self.cfg = cfg or ModelCfg()
+        self.client = None
+        self.model = "echo"
 
-    t0 = time.perf_counter()
-    jsonl = serialize_jsonl(msgs)
-    t_jsonl = time.perf_counter() - t0
+    def call_jsonl_strict(
+        self,
+        system: str,
+        user_prompt: str,
+        max_tokens: int = 256,
+        retries: int = 2,
+    ) -> List[TerseTalkLine]:
+        return [TerseTalkLine(tag="g", payload=["This is an echoed goal."])]
 
-    t1 = time.perf_counter()
-    free = serialize_freeform(msgs)
-    t_free = time.perf_counter() - t1
+    def call_text(
+        self,
+        system: str,
+        user_prompt: str,
+        max_tokens: int = 512,
+    ) -> str:
+        return "ECHO: hello from EchoModel"
 
-    b_jsonl = len(jsonl.encode("utf-8"))
-    b_free = len(free.encode("utf-8"))
-
-    has_msgpack, blob_mp, t_mp = maybe_msgpack(msgs)
-    res = {
-        "n_msgs": n,
-        "jsonl_seconds": t_jsonl,
-        "freeform_seconds": t_free,
-        "jsonl_bytes": b_jsonl,
-        "freeform_bytes": b_free,
-        "bytes_ratio_jsonl_over_freeform": (b_jsonl / b_free) if b_free > 0 else 0.0,
-    }
-    if has_msgpack:
-        res.update({
-            "msgpack_bytes": len(blob_mp),
-            "msgpack_seconds": t_mp,
-            "bytes_ratio_msgpack_over_jsonl": (len(blob_mp) / b_jsonl) if b_jsonl > 0 else 0.0,
-        })
-    return res
-
-5. benchmarks/run_all.py (new)
+2. scripts/model_smoke.py (new)
    from **future** import annotations
 
 import argparse
 import json
+import os
 
-from .tag_extraction import benchmark_tag_extraction
-from .streaming_boundaries import benchmark_streaming
-from .serde_bytes import benchmark_serde_bytes
+from tersetalk.model_io import ModelClient, EchoModel, ModelCfg, dump_jsonl
+
+SYSTEM_JSONL = (
+"You output compact, typed JSONL lines for the TerseTalk protocol. "
+"Each line is an array: ['r'|'g'|'f'|'u'|'p'|'q'|'d'|'v'|'o'|'t'|'x', ...]. "
+"Return 2-4 lines that set a role and a short goal."
+)
+USER_JSONL = "Create a manager role and a concise subgoal about comparing two dates."
+
+SYSTEM_TEXT = "You are a concise assistant."
+USER_TEXT = "Say one short sentence about efficiency."
 
 def main():
-ap = argparse.ArgumentParser(description="TerseTalk Microbenchmark Suite")
-ap.add_argument("--fast", action="store_true", help="Use smaller sizes (CI-friendly).")
-ap.add_argument("--seed", type=int, default=0)
+ap = argparse.ArgumentParser(description="PR-05: Model I/O smoke tool")
+ap.add_argument("--mode", choices=["echo", "real"], default=os.environ.get("MODEL_CLIENT", "echo"))
+ap.add_argument("--base-url", default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"))
+ap.add_argument("--model", default=os.environ.get("OLLAMA_MODEL", "mistral"))
+ap.add_argument("--api-key", default=os.environ.get("OLLAMA_API_KEY", "ollama"))
 args = ap.parse_args()
 
-    if args.fast:
-        n_tag = 20_000
-        n_stream = 20_000
-        n_serde = 2_000
+    if args.mode == "real":
+        client = ModelClient(ModelCfg(base_url=args.base_url, api_key=args.api_key, model=args.model))
     else:
-        n_tag = 40_000
-        n_stream = 40_000
-        n_serde = 5_000
+        client = EchoModel()
 
-    mb1 = benchmark_tag_extraction(n=n_tag, seed=args.seed)
-    mb2 = benchmark_streaming(n_msgs=n_stream, seed=args.seed)
-    mb3 = benchmark_serde_bytes(n=n_serde, seed=args.seed)
+    # Structured call
+    try:
+        lines = client.call_jsonl_strict(SYSTEM_JSONL, USER_JSONL, max_tokens=200)
+        jsonl = dump_jsonl(lines)
+    except Exception as e:
+        lines = []
+        jsonl = f"<error: {e}>"
 
-    report = {
-        "MB1_tag_extraction": mb1,
-        "MB2_streaming_boundaries": mb2,
-        "MB3_serde_bytes": mb3,
-        "notes": "Times are wall-clock seconds (time.perf_counter). JSON is valid YAML.",
+    # Free-form call
+    try:
+        text = client.call_text(SYSTEM_TEXT, USER_TEXT, max_tokens=50)
+    except Exception as e:
+        text = f"<error: {e}>"
+
+    out = {
+        "mode": args.mode,
+        "structured_lines": [ {"tag": ln.tag, "payload": ln.payload} for ln in lines ],
+        "structured_jsonl": jsonl,
+        "freeform_text": text,
     }
-    print(json.dumps(report, indent=2))
+    print(json.dumps(out, indent=2))
 
 if **name** == "**main**":
 main()
 
-6. scripts/benchmarks_run_all.py (new, thin wrapper)
+3. tests/test_model_io.py (new)
    from **future** import annotations
 
-import subprocess
-import sys
+import os
 
-if **name** == "**main**":
-sys.exit(subprocess.call([sys.executable, "-m", "benchmarks.run_all", "--fast"]))
+from tersetalk.model_io import EchoModel, ModelClient, ModelCfg, dump_jsonl
+from tersetalk.structured import TerseTalkLine
 
-7. tests/test_benchmarks.py (new)
-   from **future** import annotations
+def test_echo_jsonl_and_text_offline():
+client = EchoModel()
+lines = client.call_jsonl_strict("sys", "user")
+assert isinstance(lines, list) and len(lines) == 1
+assert isinstance(lines[0], TerseTalkLine)
+assert lines[0].tag == "g"
+assert isinstance(lines[0].payload, list)
 
-from benchmarks.tag_extraction import benchmark_tag_extraction
-from benchmarks.streaming_boundaries import benchmark_streaming
-from benchmarks.serde_bytes import benchmark_serde_bytes
+    text = client.call_text("sys", "user")
+    assert text.startswith("ECHO:")
 
-def test_mb1_tag_extraction_speedup_ge_10x(): # Smaller n for CI; uncompiled baseline should be dramatically slower
-res = benchmark_tag_extraction(n=20_000, seed=123)
-assert res["speedup_vs_uncompiled"] >= 10.0, res # compiled baseline may vary; ensure it's at least >1.5× for sanity
-assert res["speedup_vs_compiled"] > 1.5, res
+def test_dump_jsonl_helper_roundtrip():
+lines = [TerseTalkLine(tag="r", payload=["M"]),
+TerseTalkLine(tag="g", payload=["Compare two dates."])]
+s = dump_jsonl(lines) # Should contain both tags in order
+assert s.splitlines()[0].startswith('["r"')
+assert s.splitlines()[1].startswith('["g"')
 
-def test_mb2_streaming_boundaries_speedup_ge_5x():
-res = benchmark_streaming(n_msgs=20_000, seed=7)
-assert res["speedup"] >= 5.0, res
+def test_real_call_optional_smoke():
+"""
+Optional: If RUN_REAL_OLLAMA=1, attempt a tiny real call.
+This is skipped in CI by default.
+"""
+if os.environ.get("RUN_REAL_OLLAMA") != "1":
+return
 
-def test_mb3_jsonl_bytes_significantly_smaller():
-res = benchmark_serde_bytes(n=2_000, seed=42) # JSONL should be at least 30% smaller than a labeled free-form equivalent
-assert res["bytes_ratio_jsonl_over_freeform"] <= 0.70, res
+    cfg = ModelCfg(
+        base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        api_key=os.environ.get("OLLAMA_API_KEY", "ollama"),
+        model=os.environ.get("OLLAMA_MODEL", "mistral"),
+    )
+    client = ModelClient(cfg)
+    # Real model might or might not follow spec perfectly; Instructor will try.
+    lines = client.call_jsonl_strict(
+        "Output a single TerseTalk line with tag 'g' and a very short goal.",
+        "One short goal only.",
+        max_tokens=64,
+    )
+    assert isinstance(lines, list) and len(lines) >= 1
+    assert isinstance(lines[0], TerseTalkLine)
+
+4. Update tersetalk/**init**.py (replace file)
+   from .\_version import **version**
+
+**all** = [
+"__version__",
+"reproducibility",
+"protocol_jsonl",
+"structured",
+"memory",
+"summarization",
+"hybrid_gate",
+"noninferiority",
+"protocol_handler",
+"model_io",
+]
 
 What to run (and what to paste as evidence in the PR)
 
-Run tests
+Run tests (offline, Echo model)
 
 make test
 
-Run the suite (fast mode)
+Smoke (Echo mode, no network)
 
-python -m benchmarks.run_all --fast
+python scripts/model_smoke.py --mode echo
 
-# or
+Optional: Real Ollama smoke (manual, not CI)
 
-python scripts/benchmarks_run_all.py
+# Ensure: ollama serve (and model pulled, e.g., `ollama pull mistral`)
+
+RUN_REAL_OLLAMA=1 \
+OLLAMA_MODEL=mistral \
+OLLAMA_BASE_URL=http://localhost:11434/v1 \
+python scripts/model_smoke.py --mode real --model mistral --base-url http://localhost:11434/v1
 
 Acceptance evidence to paste in the PR description:
 
 ✅ pytest summary (all green).
 
-✅ benchmarks.run_all JSON showing:
+✅ model_smoke.py --mode echo JSON showing structured_lines with a {"tag":"g",...} and freeform_text starting with "ECHO:".
 
-MB‑1: speedup_vs_uncompiled ≥ 10 (and speedup_vs_compiled > 1.5)
-
-MB‑2: speedup ≥ 5
-
-MB‑3: bytes_ratio_jsonl_over_freeform ≤ 0.70
-
-(If present) Optional fields for MsgPack in MB‑3.
+(Optional) A real‑endpoint smoke JSON showing non‑empty structured_lines and freeform_text when Ollama is running.
 
 Commit message
-PR-MB: Microbenchmark Suite (MB‑1/MB‑2/MB‑3) + CI tests
+PR-05: Model I/O via Instructor + Ollama (with EchoModel)
 
-- MB‑1 (tag_extraction): JSONL typed fast‑path vs free‑form regex (compiled/uncompiled)
-- MB‑2 (streaming): O(1) newline boundary detection vs heuristic sentence regex
-- MB‑3 (SerDe & bytes): JSONL vs free‑form; optional msgpack guarded
-- Add benchmarks/run_all.py and scripts/benchmarks_run_all.py
-- Deterministic, stdlib‑only; tests assert ≥10× (MB‑1), ≥5× (MB‑2), and JSONL ≤70% bytes (MB‑3)
+- Add tersetalk/model_io.py:
+  - ModelCfg and ModelClient using OpenAI SDK + Instructor
+  - call_jsonl_strict() → List[TerseTalkLine] (typed)
+  - call_text() → str (free-form baseline)
+  - EchoModel for offline deterministic CI
+  - dump_jsonl() helper for canonical JSONL output
+- Add scripts/model_smoke.py for quick local smoke (echo/real)
+- Add tests/test_model_io.py (offline by default; optional real smoke via RUN_REAL_OLLAMA=1)
+- Export model_io in package **init**
