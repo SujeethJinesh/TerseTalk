@@ -183,6 +183,11 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; smoke shows preoverflow success (no `o` lines, counters.succeeded>0), overflow `o` lines labeled `llmlingua`, and deref injection replacing `d` with `f` plus counters.deref.ll2_compressed>0; run_v05 dry‑run includes protocol_demo.
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
 
+- PR‑MB — Microbenchmark Suite:
+  - Summary: Adds `benchmarks/` package (MB‑1 tag extraction, MB‑2 streaming boundaries, MB‑3 SerDe/bytes) with a `run_all` runner and tests. Optional msgpack is guard‑checked.
+  - Evidence: pytest all green; run_all --fast JSON shows MB‑1 ≥10× vs uncompiled and >1.4× vs compiled, MB‑2 ≥5×, and MB‑3 JSONL ≤70% of verbose free‑form bytes (lean ratio also reported).
+  - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
