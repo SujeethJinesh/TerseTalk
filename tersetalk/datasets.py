@@ -117,8 +117,34 @@ def _hotpot_supporting_sentences(item: Dict[str, Any]) -> List[str]:
     Fallback: first sentence of up to two contexts if supports are missing.
     """
     facts: List[str] = []
-    ctx_pairs = item.get("context") or []
-    title_to_sents = {title: sents for title, sents in ctx_pairs if isinstance(title, str)}
+    ctx_raw = item.get("context") or []
+    # Normalize contexts into iterable of (title, sents)
+    if isinstance(ctx_raw, dict):
+        ctx_iter = list(ctx_raw.items())
+        title_to_sents = {}
+        for title, sents in ctx_iter:
+            if isinstance(title, str) and isinstance(sents, (list, tuple)):
+                title_to_sents[title] = list(sents)
+    elif isinstance(ctx_raw, list) and ctx_raw and isinstance(ctx_raw[0], dict):
+        ctx_iter = list(ctx_raw)
+        title_to_sents = {}
+        for doc in ctx_iter:
+            title = doc.get("title")
+            sents = doc.get("sentences")
+            if isinstance(title, str) and isinstance(sents, (list, tuple)):
+                title_to_sents[title] = list(sents)
+    else:
+        ctx_iter = list(ctx_raw)
+        # Be robust to shapes like [title, [sents]] or longer tuples
+        title_to_sents = {}
+        for pair in ctx_iter:
+            if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+                title = pair[0]
+                sents = pair[1]
+            else:
+                continue
+            if isinstance(title, str) and isinstance(sents, (list, tuple)):
+                title_to_sents[title] = list(sents)
     for pair in item.get("supporting_facts") or []:
         if not isinstance(pair, (list, tuple)) or len(pair) != 2:
             continue
@@ -131,7 +157,21 @@ def _hotpot_supporting_sentences(item: Dict[str, Any]) -> List[str]:
             if isinstance(sent, str):
                 facts.append(f"{title}: {sent}")
     if not facts:  # safe fallback
-        facts = [f"{title}: {sents[0]}" for title, sents in ctx_pairs[:2] if sents]
+        tmp: List[str] = []
+        if isinstance(ctx_iter, list) and ctx_iter and isinstance(ctx_iter[0], dict):
+            for doc in ctx_iter[:2]:
+                title = doc.get("title")
+                sents = doc.get("sentences")
+                if isinstance(title, str) and isinstance(sents, (list, tuple)) and sents:
+                    tmp.append(f"{title}: {sents[0]}")
+        else:
+            for pair in ctx_iter[:2]:  # type: ignore[index]
+                if isinstance(pair, (list, tuple)) and len(pair) >= 2:
+                    title = pair[0]
+                    sents = pair[1]
+                    if isinstance(title, str) and isinstance(sents, (list, tuple)) and sents:
+                        tmp.append(f"{title}: {sents[0]}")
+        facts = tmp
     # de-dup and cap
     seen = set()
     uniq: List[str] = []
