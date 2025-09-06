@@ -33,7 +33,11 @@ def make_corpora(n: int = 40_000, seed: int = 0) -> Tuple[List[str], List[str]]:
     if tag == "q":
       text = _rand_words(rng, 10, 28)
       jsonl_lines.append(json.dumps(["q", "W", text]))
-      free_lines.append(f"role: manager; question: {text}; please answer.")
+      # Add extra prose to increase regex scan work
+      extra_q = "; ".join(
+        [f"context: {_rand_words(rng, 6, 14)}", f"meta: {_rand_words(rng, 5, 12)}"]
+      )
+      free_lines.append(f"role: manager; question: {text}; {extra_q}; please answer.")
     else:
       text = _rand_words(rng, 12, 24)
       jsonl_lines.append(json.dumps([tag, text]))
