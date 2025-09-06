@@ -4,6 +4,7 @@ import os
 from typing import Dict, Optional
 
 from tersetalk.model_io import ModelClient
+from tersetalk.hybrid_gate import estimate_tokens
 
 
 # ---- Utilities ----
@@ -64,24 +65,46 @@ def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256)
   """
   prompt = build_freeform_prompt(example)
   system = "You are a helpful, concise assistant."
-  response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
-
-  prompt_tokens = approx_token_count(prompt)
-  response_tokens = approx_token_count(response)
-  return {
-    "answer": response.strip(),
-    "prompt": prompt,
-    "response": response,
-    "prompt_tokens": int(prompt_tokens),
-    "response_tokens": int(response_tokens),
-    "tokens_total": int(prompt_tokens + response_tokens),
-    "used_llmlingua": False,
-    "origin_tokens": None,
-    "compressed_tokens": None,
-    "compression_ratio": None,
-    "origin_prompt": prompt,
-    "compressed_prompt": None,
-  }
+  try:
+    response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
+    prompt_tokens = approx_token_count(prompt)
+    response_tokens = approx_token_count(response)
+    return {
+      "answer": response.strip(),
+      "prompt": prompt,
+      "response": response,
+      "prompt_tokens": int(prompt_tokens),
+      "response_tokens": int(response_tokens),
+      "tokens_total": int(prompt_tokens + response_tokens),
+      "used_llmlingua": False,
+      "origin_tokens": None,
+      "compressed_tokens": None,
+      "compression_ratio": None,
+      "origin_prompt": prompt,
+      "compressed_prompt": None,
+      # PR-13 additions (non-breaking)
+      "status": "success",
+      "tokens": int(estimate_tokens(prompt) + estimate_tokens(response)),
+    }
+  except Exception as e:
+    # Robust non-crashing path
+    return {
+      "answer": "",
+      "prompt": prompt,
+      "response": "",
+      "prompt_tokens": int(approx_token_count(prompt)),
+      "response_tokens": 0,
+      "tokens_total": int(approx_token_count(prompt)),
+      "used_llmlingua": False,
+      "origin_tokens": None,
+      "compressed_tokens": None,
+      "compression_ratio": None,
+      "origin_prompt": prompt,
+      "compressed_prompt": None,
+      "status": "error",
+      "error": str(e),
+      "tokens": int(estimate_tokens(prompt)),
+    }
 
 
 def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 400, max_tokens: int = 256) -> Dict:
@@ -112,6 +135,8 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
       "compression_ratio": None,
       "origin_prompt": prompt,
       "compressed_prompt": None,
+      "status": "success",
+      "tokens": int(estimate_tokens(prompt) + estimate_tokens(response)),
     }
 
   try:
@@ -140,23 +165,47 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
       "compression_ratio": ratio,
       "origin_prompt": prompt,
       "compressed_prompt": compressed_prompt,
+      "status": "success",
+      "tokens": int(estimate_tokens(compressed_prompt) + estimate_tokens(response)),
     }
   except Exception:
     # Graceful fallback if library missing or runtime error
-    response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
-    pt = approx_token_count(prompt)
-    rt = approx_token_count(response)
-    return {
-      "answer": response.strip(),
-      "prompt": prompt,
-      "response": response,
-      "prompt_tokens": int(pt),
-      "response_tokens": int(rt),
-      "tokens_total": int(pt + rt),
-      "used_llmlingua": False,
-      "origin_tokens": None,
-      "compressed_tokens": None,
-      "compression_ratio": None,
-      "origin_prompt": prompt,
-      "compressed_prompt": None,
-    }
+    try:
+      response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
+      pt = approx_token_count(prompt)
+      rt = approx_token_count(response)
+      return {
+        "answer": response.strip(),
+        "prompt": prompt,
+        "response": response,
+        "prompt_tokens": int(pt),
+        "response_tokens": int(rt),
+        "tokens_total": int(pt + rt),
+        "used_llmlingua": False,
+        "origin_tokens": None,
+        "compressed_tokens": None,
+        "compression_ratio": None,
+        "origin_prompt": prompt,
+        "compressed_prompt": None,
+        "status": "error",
+        "tokens": int(estimate_tokens(prompt) + estimate_tokens(response)),
+      }
+    except Exception as e:
+      # If even the plain call fails, surface non-crashing error result
+      return {
+        "answer": "",
+        "prompt": prompt,
+        "response": "",
+        "prompt_tokens": int(approx_token_count(prompt)),
+        "response_tokens": 0,
+        "tokens_total": int(approx_token_count(prompt)),
+        "used_llmlingua": False,
+        "origin_tokens": None,
+        "compressed_tokens": None,
+        "compression_ratio": None,
+        "origin_prompt": prompt,
+        "compressed_prompt": None,
+        "status": "error",
+        "error": str(e),
+        "tokens": int(estimate_tokens(prompt)),
+      }
