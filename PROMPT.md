@@ -2,324 +2,282 @@ Read through your @AGENTS.md and ensure you follow that precisely. Make sure you
 
 ### PR Summary
 
-PR‑15 — Analysis Polish & Metrics Provenance (plots + Pareto + deterministic ablations)
+PR‑16 — Statistical Significance & Non‑Inferiority (offline‑safe)
 
 Goal (≤250 LOC total):
-Upgrade the analysis layer so we can (a) compute & plot Pareto frontiers robustly, (b) render deterministic cap ablations, and (c) enrich summary.json with provenance (tokenizer/SP method, timestamp, git hash). Keep it offline‑safe, stdlib+numpy+matplotlib only (no pandas). Headless by default.
+Add a tiny stats helper and a one‑shot CLI to produce paper‑grade significance outputs without SciPy (stdlib + numpy only). We report:
 
-Why this now
+Token reduction significance (paired, per‑item % reduction).
 
-Pairs with PR‑14’s run_evaluation.py outputs to make paper‑grade figures.
+Quality preservation (TerseTalk − Free‑form accuracy, CI).
 
-Provenance ensures results are audit‑ready (artifact badge friendly).
+Hybrid non‑inferiority vs LLMLingua (δ = 0.02 absolute accuracy).
 
-Deterministic ordering avoids “figure churn” in CI.
+Outputs are JSON + human‑readable console lines.
 
 Scope & constraints
 
-Files touched
+No new heavy deps: only numpy (already present).
 
-scripts/analyze_v05.py (UPDATE, main changes)
+No pandas, no SciPy; use bootstrap for CIs & one‑sided p-values.
 
-tests/test_analyze_min.py (NEW, tiny smoke)
+Works on JSONL files emitted by PR‑14 (e.g., tersetalk_baseline.jsonl, freeform.jsonl, llmlingua.jsonl, hybrid_budget_600.jsonl).
 
-No new heavy deps: stdlib (+ json, csv, pathlib, sys, subprocess) + numpy, matplotlib (Agg).
+Robust to missing fields (tokens_total vs tokens, missing correct → treated as 0.0).
 
-Works on a single run dir (with \*.jsonl + summary.json) or a parent tree of runs (recursively discovers).
+Pairing is by row index (truncate to the common length).
 
-Deterministic: fixed ablation order aggressive → baseline → relaxed → very_relaxed.
+Files (NEW)
 
-Graceful when missing fields: warn to stderr, skip plot segment, still emit files.
+tersetalk/statistics.py — small, reusable bootstrap & tests.
 
-Required implementation
+scripts/run_significance.py — CLI that loads JSONL, runs tests, writes results.
 
-1. Update scripts/analyze_v05.py
+Implementation
 
-Add a small CLI with three switches and defaults that are CI‑safe:
+1. tersetalk/statistics.py (NEW, ~90 LOC)
 
-# scripts/analyze_v05.py (UPDATE)
+# tersetalk/statistics.py
 
-# Headless plots for CI
-
-import matplotlib
-matplotlib.use("Agg")
-
-import json, csv, sys, subprocess
-from pathlib import Path
-from datetime import datetime
+from **future** import annotations
 import numpy as np
-import matplotlib.pyplot as plt
+from typing import List, Tuple, Dict
+
+def \_rng(seed: int | None = None):
+return np.random.default_rng(seed)
+
+def bootstrap*ci_diff(a: List[float], b: List[float],
+n_boot: int = 5000, conf: float = 0.95,
+paired: bool = True, seed: int | None = None
+) -> Tuple[float, float, float]:
+"""Bootstrap CI for mean(a - b). Paired by index by default."""
+a, b = np.asarray(a, float), np.asarray(b, float)
+n = min(len(a), len(b))
+a, b = a[:n], b[:n]
+if n == 0:
+return float("nan"), float("nan"), float("nan")
+r = \_rng(seed)
+diffs = []
+if paired:
+idx = np.arange(n)
+for * in range(n*boot):
+s = r.choice(idx, size=n, replace=True)
+diffs.append(np.mean(a[s] - b[s]))
+else:
+for * in range(n_boot):
+s1 = r.choice(a, size=n, replace=True)
+s2 = r.choice(b, size=n, replace=True)
+diffs.append(np.mean(s1 - s2))
+diffs = np.asarray(diffs)
+mean = float(np.mean(a - b))
+alpha = (1.0 - conf) / 2.0
+lo = float(np.quantile(diffs, alpha))
+hi = float(np.quantile(diffs, 1 - alpha))
+return mean, lo, hi
+
+def percent_reduction(before: List[float], after: List[float]) -> List[float]:
+"""Per-item % reduction: (before - after) / max(before, eps)."""
+eps = 1e-9
+before, after = np.asarray(before, float), np.asarray(after, float)
+n = min(len(before), len(after))
+if n == 0:
+return []
+b = before[:n]
+a = after[:n]
+return ((b - a) / np.maximum(b, eps)).tolist()
+
+def bootstrap*mean_ci(x: List[float], n_boot: int = 5000,
+conf: float = 0.95, seed: int | None = None
+) -> Tuple[float, float, float]:
+"""Bootstrap CI for mean(x)."""
+x = np.asarray(x, float)
+if len(x) == 0:
+return float("nan"), float("nan"), float("nan")
+r = \_rng(seed)
+means = []
+for * in range(n_boot):
+s = r.choice(x, size=len(x), replace=True)
+means.append(np.mean(s))
+means = np.asarray(means)
+alpha = (1.0 - conf) / 2.0
+return float(np.mean(x)), float(np.quantile(means, alpha)), float(np.quantile(means, 1 - alpha))
+
+def one*sided_p_gt_zero(x: List[float], n_boot: int = 10000, seed: int | None = None) -> float:
+"""Approximate one-sided p-value that mean(x) <= 0 via bootstrap."""
+x = np.asarray(x, float)
+if len(x) == 0:
+return float("nan")
+r = \_rng(seed)
+cnt = 0
+for * in range(n_boot):
+s = r.choice(x, size=len(x), replace=True)
+if np.mean(s) <= 0.0:
+cnt += 1
+return cnt / n_boot
+
+def noninferiority(treatment_acc: List[float], control_acc: List[float],
+delta: float = 0.02, conf: float = 0.95,
+seed: int | None = None) -> Dict[str, float | bool]:
+"""
+H0: treat - control < -δ; H1: treat - control >= -δ.
+Pass if CI_lower > -δ.
+"""
+mean, lo, hi = bootstrap_ci_diff(treatment_acc, control_acc, conf=conf, paired=True, seed=seed)
+return {
+"mean_difference": float(mean),
+"ci_lower": float(lo),
+"ci_upper": float(hi),
+"delta": float(delta),
+"is_noninferior": bool(lo > -delta),
+}
+
+2. scripts/run_significance.py (NEW, ~130–150 LOC)
+
+# scripts/run_significance.py
+
+import json, sys
+from pathlib import Path
+from typing import Tuple, List
 import click
+import numpy as np
+from tersetalk.statistics import (
+percent_reduction, bootstrap_mean_ci,
+bootstrap_ci_diff, one_sided_p_gt_zero, noninferiority,
+)
 
-CAP_ORDER = ["aggressive","baseline","relaxed","very_relaxed"]
-
-@click.command()
-@click.option('--indir', type=Path, required=True, help='Root dir with results')
-@click.option('--outdir', type=Path, required=True, help='Dir to write figures/CSVs')
-@click.option('--enrich-provenance/--no-enrich-provenance', default=True)
-@click.option('--pareto/--no-pareto', default=True)
-@click.option('--ablation/--no-ablation', default=True)
-def main(indir, outdir, enrich_provenance, pareto, ablation):
-outdir.mkdir(parents=True, exist_ok=True)
-runs = discover_runs(indir)
-sys.stderr.write(f"[analyze] discovered {len(runs)} run(s) under {indir}\n")
-if not runs:
-sys.stderr.write("[analyze] no runs found; exiting\n")
-return
-
-    # Prefer the most recent run folder if multiple; still allow tree aggregation for Pareto table
-    latest = max(runs, key=lambda p: p.stat().st_mtime)
-    sys.stderr.write(f"[analyze] using latest run for ablation: {latest}\n")
-
-    if pareto:
-        pts = collect_points_from_tree(runs)
-        save_pareto_csv(pts, outdir / "pareto_points.csv")
-        plot_pareto(pts, outdir / "pareto_frontier.pdf")
-
-    if ablation:
-        rows = collect_cap_ablation(latest)
-        if rows:
-            save_ablation_csv(rows, outdir / "ablation_caps.csv")
-            plot_ablation(rows, outdir / "ablation_caps.pdf")
-        else:
-            sys.stderr.write("[analyze] no cap ablation files found in latest run\n")
-
-    if enrich_provenance:
-        # Find a summary.json near the latest run
-        summary_path = latest / "summary.json"
-        if summary_path.exists():
-            enrich_summary_with_provenance(summary_path)
-        else:
-            sys.stderr.write(f"[analyze] summary.json missing at {summary_path}\n")
-
-def discover_runs(root: Path):
-"""Return list of directories that contain summary.json."""
-return sorted({p.parent for p in root.rglob("summary.json")})
-
-def list*system_files(run_dir: Path):
-"""Return mapping {name -> path} for all *.jsonl files in a run dir."""
-return {p.stem: p for p in run*dir.glob("*.jsonl")}
-
-def load_rows(jsonl_path: Path):
-with jsonl_path.open() as f:
+def load_tokens_acc(path: Path) -> Tuple[List[float], List[float]]:
+toks, acc = [], []
+if not path.exists():
+return toks, acc
+with path.open() as f:
 for line in f:
 line = line.strip()
-if not line: continue
+if not line:
+continue
 try:
-yield json.loads(line)
+r = json.loads(line)
 except Exception:
 continue
-
-def summarize_file(jsonl_path: Path):
-"""Compute avg_tokens, accuracy, overflow_rate (if available) for one system file."""
-toks, accs, overflows = [], [], []
-for r in load_rows(jsonl_path):
-if r.get('status') == 'error':
+if r.get("status") == "error":
 continue
-toks.append(r.get('tokens_total') or r.get('tokens') or 0)
-accs.append(1.0 if r.get('correct') else 0.0) # Overflow can be per-example or absent
-if 'overflow_count' in r:
-overflows.append(r['overflow_count'])
-if not toks:
-return None
-avg_tokens = float(np.mean(toks))
-accuracy = float(np.mean(accs))
-overflow_rate = float(np.mean(overflows)) if overflows else float('nan')
-return {'avg_tokens': avg_tokens, 'accuracy': accuracy, 'overflow_rate': overflow_rate}
+tok = r.get("tokens_total", r.get("tokens", None))
+if tok is not None:
+toks.append(float(tok)) # default 0.0 if unknown correctness
+acc.append(1.0 if r.get("correct") else 0.0)
+return toks, acc
 
-def collect_points_from_tree(runs):
-"""Aggregate all systems across all discovered runs into Pareto points."""
-points = []
-skipped = 0
-for run in runs:
-for name, path in list_system_files(run).items():
-s = summarize_file(path)
-if not s:
-skipped += 1
-continue
-points.append({'system': name, 'tokens': s['avg_tokens'], 'accuracy': s['accuracy']})
-sys.stderr.write(f"[analyze] pareto: {len(points)} point(s); skipped {skipped} file(s)\n") # Dedup by (system, tokens, accuracy) keeping best (lowest tokens at highest accuracy)
-uniq = {}
-for p in points:
-key = (p['system'], round(p['tokens'], 4), round(p['accuracy'], 4))
-uniq[key] = p
-return list(uniq.values())
+@click.command()
+@click.option("--results-dir", type=Path, required=True)
+@click.option("--terse-file", default="tersetalk_baseline.jsonl")
+@click.option("--free-file", default="freeform.jsonl")
+@click.option("--ll2-file", default="llmlingua.jsonl")
+@click.option("--hybrid-file",default="hybrid_budget_600.jsonl")
+@click.option("--confidence", default=0.95, show_default=True)
+@click.option("--boots", default=5000, show_default=True)
+@click.option("--out", default="significance_tests.json", show_default=True)
+def main(results_dir, terse_file, free_file, ll2_file, hybrid_file, confidence, boots, out):
+"""Run significance tests for token reduction, quality, and non-inferiority."""
+terse_t, terse_a = load_tokens_acc(results_dir / terse_file)
+free_t, free_a = load_tokens_acc(results_dir / free_file)
+ll2_t, ll2_a = load_tokens_acc(results_dir / ll2_file)
+hyb_t, hyb_a = load_tokens_acc(results_dir / hybrid_file)
 
-def pareto_frontier(points):
-"""
-Min tokens, max accuracy.
-Mark each point with 'is_pareto' True/False.
-""" # Sort for stable behavior
-pts = sorted(points, key=lambda x: (x['tokens'], -x['accuracy']))
-for i, p in enumerate(pts):
-p['is_pareto'] = True
-for j, q in enumerate(pts):
-if j == i: continue # q dominates p if: tokens <= and accuracy >= with at least one strict
-if (q['tokens'] <= p['tokens'] and q['accuracy'] >= p['accuracy']) and \
- (q['tokens'] < p['tokens'] or q['accuracy'] > p['accuracy']):
-p['is_pareto'] = False
-break
-return pts
+    report = {}
 
-def save_pareto_csv(points, path: Path):
-pts = pareto_frontier(points)
-with path.open('w', newline='') as f:
-w = csv.DictWriter(f, fieldnames=['system','tokens','accuracy','is_pareto'])
-w.writeheader()
-for p in pts: w.writerow(p)
+    # 1) Token reduction: per-item % reduction (freeform → tersetalk), paired
+    pct = percent_reduction(free_t, terse_t)
+    mean_pct, lo_pct, hi_pct = bootstrap_mean_ci(pct, n_boot=boots, conf=confidence)
+    p_one_sided = one_sided_p_gt_zero(pct, n_boot=max(boots, 5000))
+    report["token_reduction"] = {
+        "mean_reduction_pct": float(mean_pct),
+        "ci_lower": float(lo_pct),
+        "ci_upper": float(hi_pct),
+        "p_one_sided_gt0": float(p_one_sided),
+        "n": len(pct)
+    }
 
-def plot_pareto(points, pdf_path: Path):
-pts = pareto_frontier(points)
-fig, ax = plt.subplots(figsize=(8,5))
-for p in pts:
-m = 'o' if p['is_pareto'] else 'x'
-ax.scatter(p['tokens'], p['accuracy'], marker=m) # Label frontier only to reduce clutter
-if p['is_pareto']:
-ax.annotate(p['system'], (p['tokens'], p['accuracy']), xytext=(3,3), textcoords='offset points', fontsize=8) # Connect frontier curve (sorted by tokens)
-front = [p for p in pts if p['is_pareto']]
-front.sort(key=lambda x: x['tokens'])
-if front:
-ax.plot([p['tokens'] for p in front], [p['accuracy'] for p in front], linestyle='--', linewidth=1)
-ax.set_xlabel('Total Tokens (lower is better)')
-ax.set_ylabel('Task Accuracy (higher is better)')
-ax.grid(True, alpha=0.3)
-fig.tight_layout()
-fig.savefig(pdf_path)
+    # 2) Quality preservation: accuracy(terse) - accuracy(freeform)
+    mean_q, lo_q, hi_q = bootstrap_ci_diff(terse_a, free_a, n_boot=boots, conf=confidence, paired=True)
+    report["quality_preservation"] = {
+        "mean_diff": float(mean_q),
+        "ci_lower": float(lo_q),
+        "ci_upper": float(hi_q),
+        "n": int(min(len(terse_a), len(free_a)))
+    }
 
-def collect*cap_ablation(run_dir: Path):
-"""Return deterministic rows for tersetalk*{cap}.jsonl in CAP*ORDER."""
-rows = []
-for cap in CAP_ORDER:
-path = run_dir / f"tersetalk*{cap}.jsonl"
-if not path.exists():
-sys.stderr.write(f"[analyze] missing {path.name}; skipping\n")
-continue
-s = summarize_file(path)
-if not s:
-continue
-if np.isnan(s['overflow_rate']):
-sys.stderr.write(f"[analyze] overflow_rate NaN for {cap}\n")
-rows.append({'name': cap,
-'avg_cap': {'aggressive':20,'baseline':30,'relaxed':50,'very_relaxed':100}[cap],
-'tokens': s['avg_tokens'],
-'accuracy': s['accuracy'],
-'overflow_rate': s['overflow_rate']})
-return rows
+    # 3) Hybrid non-inferiority vs LLMLingua
+    report["hybrid_noninferiority"] = noninferiority(hyb_a, ll2_a, delta=0.02, conf=confidence)
 
-def save_ablation_csv(rows, path: Path):
-with path.open('w', newline='') as f:
-w = csv.DictWriter(f, fieldnames=['name','avg_cap','tokens','accuracy','overflow_rate'])
-w.writeheader()
-for r in rows: w.writerow(r)
+    # Print concise summary
+    print("\n" + "="*60)
+    print("SIGNIFICANCE RESULTS")
+    print("="*60)
+    tr = report["token_reduction"]
+    print(f"Token Reduction (free→terse): {tr['mean_reduction_pct']:.1%} "
+          f"[{tr['ci_lower']:.1%}, {tr['ci_upper']:.1%}]  "
+          f"p(one‑sided>0)={tr['p_one_sided_gt0']:.4f}  n={tr['n']}")
+    qp = report["quality_preservation"]
+    print(f"Quality Δ (terse‑free): {qp['mean_diff']:.3f} "
+          f"[{qp['ci_lower']:.3f}, {qp['ci_upper']:.3f}]  n={qp['n']}")
+    hi = report["hybrid_noninferiority"]
+    print(f"Hybrid vs LLMLingua Non‑Inferiority (δ=0.02): "
+          f"{'PASS' if hi['is_noninferior'] else 'FAIL'}; "
+          f"Δ={hi['mean_difference']:.3f}, CI=[{hi['ci_lower']:.3f},{hi['ci_upper']:.3f}]")
 
-def plot_ablation(rows, pdf_path: Path): # rows already deterministic order
-xs_cap = [r['avg_cap'] for r in rows]
-ys_tok = [r['tokens'] for r in rows]
-xs_over = [r['overflow_rate'] for r in rows if not np.isnan(r['overflow_rate'])]
-ys_acc = [r['accuracy'] for r in rows if not np.isnan(r['overflow_rate'])]
-fig1, ax1 = plt.subplots(figsize=(6,4))
-ax1.plot(xs_cap, ys_tok, 'o-')
-ax1.set_xlabel('Average Cap Size (tokens)')
-ax1.set_ylabel('Total Tokens Used')
-ax1.grid(True, alpha=0.3)
-fig1.tight_layout()
-fig1.savefig(pdf_path) # single‑page: keep concise
-
-def enrich_summary_with_provenance(summary_path: Path):
-summary = json.loads(summary_path.read_text())
-for name, stats in summary.items():
-stats['tokens_method'] = 'tiktoken' if tiktoken_available() else 'heuristic'
-stats['sp_method'] = 'bertscore' if bertscore_available() else 'jaccard'
-stats['timestamp'] = datetime.now().isoformat()
-stats['version'] = get_repo_version()
-summary_path.write_text(json.dumps(summary, indent=2))
-sys.stderr.write(f"[analyze] enriched provenance in {summary_path}\n")
-
-def tiktoken_available():
-try:
-import tiktoken # noqa: F401
-return True
-except Exception:
-return False
-
-def bertscore_available():
-try:
-import bert_score # noqa: F401
-return True
-except Exception:
-return False
-
-def get_repo_version():
-try:
-out = subprocess.check_output(['git','rev-parse','--short','HEAD'], stderr=subprocess.DEVNULL).decode().strip()
-return out or "unknown"
-except Exception:
-return "unknown"
+    # Save full JSON
+    out_path = results_dir / out
+    out_path.write_text(json.dumps(report, indent=2))
+    print(f"\nSaved: {out_path}")
 
 if **name** == "**main**":
 main()
 
-Notes:
+Tests (NEW, tiny)
 
-Reads any run layout produced by PR‑14 (e.g., hybrid*budget_600.jsonl, freeform.jsonl, tersetalk*{cap}.jsonl).
+tests/test_statistics_smoke.py (~35 LOC)
 
-Writes pareto_points.csv, pareto_frontier.pdf, ablation_caps.{csv,pdf}.
+from pathlib import Path
+import subprocess, sys, json
 
-Logs discovered run count + missing files to stderr.
+def test_significance_smoke(tmp_path: Path):
+d = tmp_path / "runs"
+d.mkdir() # Minimal aligned rows: freeform worse tokens, same accuracy; hybrid ~ ll2
+(d / "freeform.jsonl").write_text('{"tokens":100,"correct":true,"status":"success"}\n')
+(d / "tersetalk_baseline.jsonl").write_text('{"tokens":60,"correct":true,"status":"success"}\n')
+(d / "llmlingua.jsonl").write_text('{"tokens":70,"correct":true,"status":"success"}\n')
+(d / "hybrid_budget_600.jsonl").write_text('{"tokens":65,"correct":true,"status":"success"}\n')
 
-2. Tiny smoke test tests/test_analyze_min.py (NEW)
-
-# tests/test_analyze_min.py
-
-import sys, subprocess, pathlib
-
-def test_analyze_smoke(tmp_path): # Create a tiny faux run: two systems + summary.json
-run = tmp_path / "results" / "evaluation" / "hotpotqa" / "2025-01-01-00-00-00"
-run.mkdir(parents=True)
-(run / "freeform.jsonl").write_text('{"tokens": 100, "correct": true, "status":"success"}\n')
-(run / "tersetalk_baseline.jsonl").write_text('{"tokens": 60, "correct": true, "status":"success", "overflow_count":0}\n')
-(run / "summary.json").write_text('{"freeform":{"n_total":1,"n_successful":1,"avg_tokens":100,"accuracy":1.0,"compliance_rate":1.0}}')
-outdir = tmp_path / "figs"
-
-    cmd = [sys.executable, "scripts/analyze_v05.py",
-           "--indir", str(tmp_path / "results"),
-           "--outdir", str(outdir)]
+    cmd = [sys.executable, "scripts/run_significance.py", "--results-dir", str(d), "--boots", "2000"]
     subprocess.run(cmd, check=True)
+    out = json.loads((d / "significance_tests.json").read_text())
+    assert "token_reduction" in out and out["token_reduction"]["n"] == 1
+    assert "hybrid_noninferiority" in out
 
-    assert (outdir / "pareto_points.csv").exists()
-    assert (outdir / "pareto_frontier.pdf").exists()
+Definition of Done
 
-Definition of Done (acceptance)
+python scripts/run_significance.py --results-dir results/evaluation/TASK/seed_42:
 
-python scripts/analyze_v05.py --indir results/evaluation --outdir figures:
+Prints three lines (token reduction, quality Δ, non‑inferiority PASS/FAIL).
 
-Prints discovered run count and latest run used to stderr.
+Writes significance_tests.json with:
 
-Emits:
+token_reduction: mean_reduction_pct, ci_lower, ci_upper, p_one_sided_gt0, n
 
-figures/pareto_points.csv (cols: system,tokens,accuracy,is_pareto)
+quality_preservation: mean_diff, ci_lower, ci_upper, n
 
-figures/pareto_frontier.pdf
+hybrid_noninferiority: mean_difference, ci_lower, ci_upper, delta, is_noninferior
 
-If cap files present: figures/ablation_caps.csv, figures/ablation_caps.pdf
+Handles missing files gracefully (n=0 → NaNs, still emits JSON).
 
-If all overflow_rate are NaN → warns to stderr and still saves tokens plot.
+Keeps total new code ≤250 LOC (library + script + smoke test, comments minimal).
 
---no-pareto or --no-ablation skips corresponding artifacts.
+No SciPy; offline‑safe.
 
---enrich-provenance updates a detected summary.json in latest run with:
+Out of scope
 
-tokens_method, sp_method, timestamp, version (git short hash or "unknown").
+Multiple‑comparison corrections, Bayesian tests, or stratified analysis by task subsets.
 
-CI/headless safe (Agg backend), no pandas, no network required for smoke.
+Fancy tables/plots (handled by PR‑15).
 
-Out of scope / non‑goals
-
-Significance tests (handled in PR‑16).
-
-Multi‑page, styled figures (keep simple and legible).
-
-Parsing latency distributions (that’s PR‑12D optional).
-
-Branch name suggestion: pr-15-analysis-provenance
-Commit message: PR-15: Pareto + deterministic cap ablations and provenance; headless plots; CSV artifacts
+Branch name: pr-16-significance
+Commit msg: PR-16: Bootstrap significance + non-inferiority CLI (numpy-only, offline-safe)
