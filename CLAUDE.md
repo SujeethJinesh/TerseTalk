@@ -76,6 +76,14 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
 - Ensure PR‑00 files and tests remain intact and passing.
 - Confirm runtime deps minimality (click, tqdm); no heavy tooling added.
 
+### For PR-12 — Analysis Scripts
+
+- Validate `@scripts/analyze_v05.py` scans a results root for run dirs (with `config.json`), reads `summary.json`, and writes `by_run.csv`, `pareto_<task>.(pdf|png|svg)`, `pareto_points_<task>.csv`, and optionally `ablation_caps_<task>.(pdf|png|svg)` plus CSV.
+- Check it handles empty/missing files gracefully and uses only stdlib + numpy + matplotlib (headless via Agg backend; no seaborn/pandas).
+- Confirm CLI flags: `--indir`, `--outdir`, `--task`, `--system`, `--format`, `--no-annotate`.
+- Verify smoke test `@tests/test_analyze_v05_smoke.py` runs `@scripts/run_v05.py` with Echo on synth and then analysis, asserting CSV and Pareto figure creation.
+- Assess publication friendliness of plots and that Pareto logic matches minimize tokens / maximize accuracy per v0.5. If fully acceptable, end with exactly: `Approved: no nits.`
+
 ## Notes
 
 - The .gitignore is configured for Python projects with comprehensive exclusions for common Python artifacts
