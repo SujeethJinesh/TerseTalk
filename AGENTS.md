@@ -424,3 +424,8 @@ You are writing code to test the minimal viable research proposal.
   - Summary: Upgrades `scripts/analyze_v05.py` with tree-wide Pareto CSV+PDF, deterministic cap ablations from filename-parsed caps, and provenance enrichment (tokens_method, sp_method, timestamp, git hash). Headless; stdlib+numpy+matplotlib only; keeps prior outputs for back-compat.
   - Evidence: pytest green; new smoke test `tests/test_analyze_min.py` creates a tiny faux run and the tool emits `pareto_points.csv` + `pareto_frontier.pdf`. Compatible with PR‑14 outputs (e.g., `tersetalk_f*_p*_q*.jsonl`).
   - Next: Run on latest Ollama runs (phi, llama3.1:8b) and attach figures to PRs.
+
+- PR-16 — Statistical Significance & Non‑Inferiority:
+  - Summary: Adds `tersetalk/statistics.py` (numpy-only bootstrap: paired CI, percent reduction, mean CI, one-sided p, noninferiority) and `scripts/run_significance.py` CLI. Produces concise console lines and `significance_tests.json` from PR‑14 JSONL outputs.
+  - Evidence: pytest green; `tests/test_statistics_smoke.py` creates minimal aligned rows and verifies JSON output; Claude review Approved: no nits.
+  - Next: Run on Ollama evaluation outputs (phi, llama3.1:8b) to quantify token reductions and quality deltas; attach reports to PRs.
