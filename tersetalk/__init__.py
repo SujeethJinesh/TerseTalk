@@ -13,4 +13,5 @@ __all__ = [
   "model_io",
   "datasets",
   "pipeline_runner",
+  "baselines",
 ]
