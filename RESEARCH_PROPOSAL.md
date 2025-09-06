@@ -976,6 +976,653 @@ def generate_ablation_plots(results_dir: Path):
 
 **DoD:** Figures generated; insights clear; publication-ready.
 
+#### PR-13 — Baselines Parameters & Robustness (~200 LOC)
+
+```python
+# tersetalk/baselines.py (update existing)
+
+def run_freeform_once(example: dict, client: ModelClient, max_tokens: int = 256) -> dict:
+"""
+Free-form baseline with configurable max_tokens.
+
+    Args:
+        example: Task example with question, facts, etc.
+        client: Model client for generation
+        max_tokens: Maximum tokens for response (default 256)
+    """
+    prompt = build_freeform_prompt(example)
+
+    try:
+        response = client.call(prompt, max_tokens=max_tokens)
+        tokens_used = estimate_tokens(prompt) + estimate_tokens(response)
+    except Exception as e:
+        # Record failure but don't crash
+        return {
+            "answer": "",
+            "tokens": estimate_tokens(prompt),
+            "error": str(e),
+            "status": "error"
+        }
+
+    return {
+        "answer": response,
+        "tokens": tokens_used,
+        "status": "success"
+    }
+
+def run_llmlingua_once(example: dict, client: ModelClient,
+max_tokens: int = 256,
+target_compression: int = 100) -> dict:
+"""
+LLMLingua baseline with configurable parameters.
+
+    Args:
+        max_tokens: Max tokens for model response
+        target_compression: Target tokens after compression
+    """
+    prompt = build_freeform_prompt(example)
+
+    try:
+        from llmlingua import PromptCompressor
+        compressor = PromptCompressor()
+        compressed = compressor.compress(
+            prompt,
+            target_token=target_compression
+        )
+
+        response = client.call(
+            compressed['compressed_prompt'],
+            max_tokens=max_tokens
+        )
+
+        return {
+            "answer": response,
+            "tokens": compressed['origin_tokens'],
+            "compressed_tokens": compressed['compressed_tokens'],
+            "compression_ratio": compressed['ratio'],
+            "status": "success"
+        }
+    except ImportError:
+        # LLMLingua not available, fall back to free-form
+        return run_freeform_once(example, client, max_tokens)
+    except Exception as e:
+        return {
+            "answer": "",
+            "tokens": estimate_tokens(prompt),
+            "error": str(e),
+            "status": "error"
+        }
+
+def build_freeform_prompt(example: dict) -> str:
+"""
+Build free-form prompt from example.
+
+    Note: The standalone "Question:" line is retained to match
+    typical multi-agent prompting patterns where the query
+    is clearly delineated from context.
+    """
+    facts_str = '\n'.join(f"- {fact}" for fact in example.get('facts', []))
+
+    prompt = f"""Role: Manager
+
+Goal: {example.get('subgoal', 'Answer the question')}
+
+Facts:
+{facts_str}
+
+Assumptions:
+{'; '.join(example.get('assumptions', []))}
+
+Question: {example['question']}"""
+
+    return prompt
+```
+
+##### scripts/baselines_smoke.py (new file)
+
+```python
+import click
+from tersetalk.baselines import run_freeform_once, run_llmlingua_once
+from tersetalk.model_io import ModelClient, EchoModel
+
+@click.command()
+@click.option('--model', type=click.Choice(['echo', 'real']), default='echo')
+@click.option('--max-tokens', default=256)
+@click.option('--target-compression', default=100)
+def main(model, max_tokens, target_compression):
+    """Smoke test for baseline systems."""
+
+    client = EchoModel() if model == 'echo' else ModelClient()
+
+    example = {
+        "question": "What is 2+2?",
+        "facts": ["Basic arithmetic", "Addition operation"],
+        "subgoal": "Solve the math problem",
+        "assumptions": ["Use standard arithmetic"]
+    }
+
+    # Test free-form
+    result_ff = run_freeform_once(example, client, max_tokens)
+    print(f"Free-form: {result_ff}")
+
+    # Test LLMLingua
+    result_ll = run_llmlingua_once(
+        example, client, max_tokens, target_compression
+    )
+    print(f"LLMLingua: {result_ll}")
+
+if __name__ == "__main__":
+    main()
+```
+
+**Tests (tests/test_baselines_params.py):**
+
+```python
+pythondef test_max_tokens_parameter():
+    """Verify max_tokens is passed through correctly."""
+    client = EchoModel()
+    example = {"question": "test", "facts": []}
+
+    result = run_freeform_once(example, client, max_tokens=128)
+    assert result["status"] == "success"
+
+def test_error_handling():
+    """Verify baselines don't crash on errors."""
+    # Test with a client that raises exceptions
+    # Verify we get error status but no crash
+```
+
+**DoD:** Baselines accept parameters; errors handled gracefully; smoke CLI works.
+
+#### PR-14+EVAL — Real Experiments & Evaluation Driver (~250 LOC)
+
+Combining experiment setup with evaluation driver since they're tightly coupled
+
+```python
+# scripts/run_evaluation.py (new file)
+
+import click
+import json
+from pathlib import Path
+from datetime import datetime
+from tqdm import tqdm
+import random
+
+from tersetalk.datasets import load_hotpotqa, load_gsm8k
+from tersetalk.pipeline_runner import run_pipeline_once
+from tersetalk.baselines import run_freeform_once, run_llmlingua_once
+from tersetalk.model_io import ModelClient, EchoModel
+from tersetalk.reproducibility import set_global_seed
+
+@click.command()
+@click.option('--task', type=click.Choice(['hotpotqa', 'gsm8k']), required=True)
+@click.option('--systems', multiple=True,
+              type=click.Choice(['tersetalk', 'freeform', 'llmlingua', 'hybrid']),
+              default=['tersetalk', 'freeform', 'llmlingua'])
+@click.option('--n', default=500, help='Examples per task')
+@click.option('--seed', default=42)
+@click.option('--caps-grid', is_flag=True, help='Run cap ablation grid')
+@click.option('--output-dir', default='results/evaluation')
+@click.option('--model', default='mistral')
+@click.option('--dry-run', is_flag=True, help='Test with 10 examples')
+def main(task, systems, n, seed, caps_grid, output_dir, model, dry_run):
+    """
+    Full evaluation driver for TerseTalk experiments.
+
+    Produces complete results for paper figures.
+    """
+    # Setup
+    set_global_seed(seed)
+    output_path = Path(output_dir) / task / f"seed_{seed}"
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Override n for dry run
+    if dry_run:
+        n = 10
+        print(f"DRY RUN: Using only {n} examples")
+
+    # Load data
+    print(f"Loading {n} examples from {task}...")
+    if task == 'hotpotqa':
+        examples = load_hotpotqa(split='validation', n=n, seed=seed)
+    else:
+        examples = load_gsm8k(split='test', n=n, seed=seed)
+
+    # Initialize model
+    if model == 'echo' or dry_run:
+        client = EchoModel()
+    else:
+        client = ModelClient(model)
+
+    # Define cap configurations for ablation
+    if caps_grid:
+        cap_configs = [
+            {"f": 20, "p": 15, "q": 20, "name": "aggressive"},
+            {"f": 30, "p": 20, "q": 30, "name": "baseline"},
+            {"f": 50, "p": 40, "q": 50, "name": "relaxed"},
+            {"f": 100, "p": 80, "q": 100, "name": "very_relaxed"}
+        ]
+    else:
+        cap_configs = [{"f": 30, "p": 20, "q": 30, "name": "baseline"}]
+
+    # Run experiments
+    all_results = {}
+
+    for system in systems:
+        print(f"\nRunning {system}...")
+
+        if system == 'tersetalk':
+            # Run with each cap configuration
+            for cap_config in cap_configs:
+                caps = {k: v for k, v in cap_config.items() if k != 'name'}
+                config_name = f"{system}_{cap_config['name']}"
+
+                results = run_system_evaluation(
+                    examples, client, system,
+                    config={'caps': caps}
+                )
+
+                all_results[config_name] = results
+                save_results(results, output_path / f"{config_name}.jsonl")
+
+        elif system == 'hybrid':
+            # Hybrid with different token budgets
+            for budget in [400, 600, 800]:
+                config_name = f"{system}_budget_{budget}"
+
+                results = run_system_evaluation(
+                    examples, client, 'tersetalk',
+                    config={
+                        'caps': {"f": 30, "p": 20, "q": 30},
+                        'hybrid': True,
+                        'token_budget': budget
+                    }
+                )
+
+                all_results[config_name] = results
+                save_results(results, output_path / f"{config_name}.jsonl")
+
+        else:
+            # Baselines
+            results = run_system_evaluation(
+                examples, client, system, config={}
+            )
+            all_results[system] = results
+            save_results(results, output_path / f"{system}.jsonl")
+
+    # Save summary
+    summary = compute_summary(all_results)
+    with open(output_path / "summary.json", 'w') as f:
+        json.dump(summary, f, indent=2)
+
+    print(f"\nResults saved to {output_path}")
+    print_summary_table(summary)
+
+def run_system_evaluation(examples, client, system, config):
+    """Run evaluation for one system configuration."""
+    results = []
+
+    for example in tqdm(examples):
+        if system == 'tersetalk':
+            result = run_pipeline_once(example, client, config)
+        elif system == 'freeform':
+            result = run_freeform_once(example, client)
+        elif system == 'llmlingua':
+            result = run_llmlingua_once(example, client)
+        else:
+            raise ValueError(f"Unknown system: {system}")
+
+        results.append(result)
+
+    return results
+
+def save_results(results, filepath):
+    """Save results to JSONL file."""
+    with open(filepath, 'w') as f:
+        for result in results:
+            f.write(json.dumps(result) + '\n')
+
+def compute_summary(all_results):
+    """Compute summary statistics for all runs."""
+    summary = {}
+
+    for config_name, results in all_results.items():
+        # Filter successful results
+        successful = [r for r in results if r.get('status') != 'error']
+
+        summary[config_name] = {
+            'n_total': len(results),
+            'n_successful': len(successful),
+            'avg_tokens': sum(r['tokens'] for r in successful) / len(successful),
+            'accuracy': sum(1 for r in successful if r.get('correct', False)) / len(successful),
+            'compliance_rate': len(successful) / len(results)
+        }
+
+    return summary
+
+def print_summary_table(summary):
+    """Print formatted summary table."""
+    print("\n" + "="*60)
+    print(f"{'System':<25} {'Tokens':<10} {'Accuracy':<10} {'Compliance':<10}")
+    print("-"*60)
+    for name, stats in summary.items():
+        print(f"{name:<25} {stats['avg_tokens']:<10.1f} "
+              f"{stats['accuracy']:<10.2%} {stats['compliance_rate']:<10.2%}")
+```
+
+**DoD:** Runs 500 examples; produces cap ablation grid; saves versioned results; generates summary.
+
+#### PR-15 — Analysis Polish & Metrics Provenance (~240 LOC)
+
+Priority: BEFORE EXPERIMENTS
+Combining analysis improvements with provenance tracking
+
+```python
+# scripts/analyze_v05.py (update existing)
+
+def generate_pareto_curve(results_dir: Path, output_dir: Path):
+    """
+    Generate quality vs tokens Pareto frontier.
+
+    Objective: minimize tokens, maximize accuracy (multi-objective).
+    """
+    systems_data = load_all_systems(results_dir)
+
+    # Compute Pareto frontier
+    pareto_points = []
+    for name, data in systems_data.items():
+        point = {
+            'system': name,
+            'tokens': data['avg_tokens'],
+            'accuracy': data['accuracy'],
+            'is_pareto': False
+        }
+        pareto_points.append(point)
+
+    # Mark Pareto-optimal points
+    for p1 in pareto_points:
+        p1['is_pareto'] = True
+        for p2 in pareto_points:
+            if p2['tokens'] < p1['tokens'] and p2['accuracy'] >= p1['accuracy']:
+                p1['is_pareto'] = False
+                break
+            elif p2['tokens'] <= p1['tokens'] and p2['accuracy'] > p1['accuracy']:
+                p1['is_pareto'] = False
+                break
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    for point in pareto_points:
+        marker = 'o' if point['is_pareto'] else 'x'
+        ax.scatter(point['tokens'], point['accuracy'],
+                  marker=marker, s=100, label=point['system'])
+
+    # Connect Pareto frontier
+    pareto_only = [p for p in pareto_points if p['is_pareto']]
+    pareto_only.sort(key=lambda x: x['tokens'])
+
+    if pareto_only:
+        xs = [p['tokens'] for p in pareto_only]
+        ys = [p['accuracy'] for p in pareto_only]
+        ax.plot(xs, ys, 'r--', alpha=0.5, label='Pareto Frontier')
+
+    ax.set_xlabel('Total Tokens (lower is better)')
+    ax.set_ylabel('Task Accuracy (higher is better)')
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'pareto_frontier.pdf')
+    print(f"Pareto curve saved to {output_dir / 'pareto_frontier.pdf'}")
+
+def generate_ablation_plots(results_dir: Path, output_dir: Path):
+    """Generate cap ablation plots with deterministic ordering."""
+
+    # Load cap configurations in deterministic order
+    cap_configs = [
+        ("aggressive", 20),
+        ("baseline", 30),
+        ("relaxed", 50),
+        ("very_relaxed", 100)
+    ]
+
+    results = []
+    for name, avg_cap in cap_configs:
+        data = load_system_data(results_dir / f"tersetalk_{name}.jsonl")
+        if data is None:
+            print(f"Warning: No data for tersetalk_{name}, skipping")
+            continue
+
+        overflow_rate = data.get('overflow_rate', float('nan'))
+        if np.isnan(overflow_rate):
+            print(f"Warning: overflow_rate is NaN for {name}")
+
+        results.append({
+            'name': name,
+            'avg_cap': avg_cap,
+            'tokens': data['avg_tokens'],
+            'accuracy': data['accuracy'],
+            'overflow_rate': overflow_rate
+        })
+
+    if not results:
+        print("Warning: No cap ablation data found")
+        return
+
+    # Plot with provenance
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Tokens vs cap size
+    ax1.plot([r['avg_cap'] for r in results],
+             [r['tokens'] for r in results], 'o-', linewidth=2)
+    ax1.set_xlabel('Average Cap Size (tokens)')
+    ax1.set_ylabel('Total Tokens Used')
+    ax1.grid(True, alpha=0.3)
+
+    # Accuracy vs overflow
+    valid_overflow = [r for r in results if not np.isnan(r['overflow_rate'])]
+    if valid_overflow:
+        ax2.plot([r['overflow_rate'] for r in valid_overflow],
+                [r['accuracy'] for r in valid_overflow], 'o-', linewidth=2)
+    ax2.set_xlabel('Overflow Rate')
+    ax2.set_ylabel('Task Accuracy')
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(output_dir / 'ablation_caps.pdf')
+
+def enrich_summary_with_provenance(summary_path: Path):
+    """Add provenance information to summary.json."""
+
+    with open(summary_path, 'r') as f:
+        summary = json.load(f)
+
+    # Add provenance fields
+    for system_name in summary:
+        summary[system_name].update({
+            'tokens_method': 'tiktoken' if tiktoken_available() else 'heuristic',
+            'sp_method': 'bertscore' if bertscore_available() else 'jaccard',
+            'timestamp': datetime.now().isoformat(),
+            'version': get_repo_version()  # Git hash if available
+        })
+
+    # Save enriched summary
+    with open(summary_path, 'w') as f:
+        json.dump(summary, f, indent=2)
+
+def tiktoken_available():
+    """Check if tiktoken is available."""
+    try:
+        import tiktoken
+        return True
+    except ImportError:
+        return False
+
+def bertscore_available():
+    """Check if BERTScore is available."""
+    try:
+        import bert_score
+        return True
+    except ImportError:
+        return False
+```
+
+**DoD:** Pareto frontier identified correctly; ablation plots deterministic; provenance tracked.
+
+#### PR-16 — Statistical Significance Testing (~200 LOC)
+
+```python
+# tersetalk/statistics.py (new file)
+
+import numpy as np
+from scipy import stats
+from typing import List, Dict, Tuple
+
+def bootstrap_ci(data1: List[float], data2: List[float],
+                 n_bootstrap: int = 10000,
+                 confidence: float = 0.95) -> Tuple[float, float, float]:
+    """
+    Compute bootstrap confidence interval for difference.
+
+    Returns:
+        (mean_diff, ci_lower, ci_upper)
+    """
+    diffs = []
+    n1, n2 = len(data1), len(data2)
+
+    for _ in range(n_bootstrap):
+        # Resample with replacement
+        sample1 = np.random.choice(data1, n1, replace=True)
+        sample2 = np.random.choice(data2, n2, replace=True)
+        diffs.append(np.mean(sample1) - np.mean(sample2))
+
+    # Compute percentile CI
+    alpha = 1 - confidence
+    ci_lower = np.percentile(diffs, 100 * alpha/2)
+    ci_upper = np.percentile(diffs, 100 * (1 - alpha/2))
+    mean_diff = np.mean(data1) - np.mean(data2)
+
+    return mean_diff, ci_lower, ci_upper
+
+def test_noninferiority(treatment: List[float], control: List[float],
+                       delta: float = 0.02,
+                       confidence: float = 0.95) -> Dict:
+    """
+    Test if treatment is non-inferior to control.
+
+    H0: treatment - control < -delta (treatment is inferior)
+    H1: treatment - control >= -delta (treatment is non-inferior)
+
+    Args:
+        treatment: Accuracy values for treatment (e.g., Hybrid)
+        control: Accuracy values for control (e.g., LLMLingua)
+        delta: Non-inferiority margin (default 2%)
+        confidence: Confidence level (default 95%)
+
+    Returns:
+        Dictionary with test results
+    """
+    mean_diff, ci_lower, ci_upper = bootstrap_ci(treatment, control, confidence=confidence)
+
+    # For non-inferiority, check if lower bound > -delta
+    is_noninferior = ci_lower > -delta
+
+    return {
+        'mean_difference': mean_diff,
+        'ci_lower': ci_lower,
+        'ci_upper': ci_upper,
+        'delta': delta,
+        'is_noninferior': is_noninferior,
+        'p_value_approx': 1 - confidence if is_noninferior else confidence
+    }
+
+def paired_t_test(before: List[float], after: List[float]) -> Dict:
+    """
+    Paired t-test for token reduction claims.
+
+    Use when same examples are run through different systems.
+    """
+    diffs = [a - b for a, b in zip(after, before)]
+    t_stat, p_value = stats.ttest_1samp(diffs, 0)
+
+    return {
+        'mean_reduction': np.mean(diffs),
+        'std_reduction': np.std(diffs),
+        't_statistic': t_stat,
+        'p_value': p_value,
+        'significant': p_value < 0.05
+    }
+
+def compute_all_significance_tests(results_dir: Path) -> Dict:
+    """
+    Run all significance tests for paper claims.
+    """
+    tests = {}
+
+    # Load results
+    tersetalk = load_accuracies(results_dir / "tersetalk_baseline.jsonl")
+    freeform = load_accuracies(results_dir / "freeform.jsonl")
+    llmlingua = load_accuracies(results_dir / "llmlingua.jsonl")
+    hybrid = load_accuracies(results_dir / "hybrid_budget_600.jsonl")
+
+    # Test 1: Token reduction significance
+    tersetalk_tokens = load_tokens(results_dir / "tersetalk_baseline.jsonl")
+    freeform_tokens = load_tokens(results_dir / "freeform.jsonl")
+
+    tests['token_reduction'] = paired_t_test(freeform_tokens, tersetalk_tokens)
+
+    # Test 2: Quality preservation
+    tests['quality_preservation'] = bootstrap_ci(tersetalk, freeform)
+
+    # Test 3: Hybrid non-inferiority
+    tests['hybrid_noninferiority'] = test_noninferiority(
+        hybrid, llmlingua, delta=0.02
+    )
+
+    return tests
+```
+
+##### scripts/run_significance.py (new file)
+
+```python
+@click.command()
+@click.option('--results-dir', required=True, type=Path)
+@click.option('--output', default='significance_tests.json')
+def main(results_dir, output):
+    """Run statistical significance tests for paper claims."""
+
+    tests = compute_all_significance_tests(results_dir)
+
+    # Print summary
+    print("\n" + "="*60)
+    print("SIGNIFICANCE TEST RESULTS")
+    print("="*60)
+
+    # Token reduction
+    tr = tests['token_reduction']
+    print(f"\nToken Reduction: {tr['mean_reduction']:.1%} "
+          f"(p={tr['p_value']:.4f}, {'SIG' if tr['significant'] else 'NS'})")
+
+    # Quality preservation
+    qp = tests['quality_preservation']
+    print(f"\nQuality Difference: {qp[0]:.3f} "
+          f"[95% CI: {qp[1]:.3f}, {qp[2]:.3f}]")
+
+    # Hybrid non-inferiority
+    hi = tests['hybrid_noninferiority']
+    print(f"\nHybrid Non-Inferiority: {'PASS' if hi['is_noninferior'] else 'FAIL'}")
+    print(f"  Difference: {hi['mean_difference']:.3f}")
+    print(f"  95% CI: [{hi['ci_lower']:.3f}, {hi['ci_upper']:.3f}]")
+    print(f"  Margin: {hi['delta']:.3f}")
+
+    # Save full results
+    with open(output, 'w') as f:
+        json.dump(tests, f, indent=2)
+```
+
+**DoD:** All major claims have p-values; non-inferiority tested; results in paper-ready format.
+
 ### 4.5 Week 7: Optional Topology Extension
 
 #### PR-V1 — Binary Topology Router (~350 LOC)

@@ -18,6 +18,8 @@ around the current pipeline/baselines without changing research scope.
    - Import‑guarded tiktoken support; fallback to len/4 heuristic.
    - Tests: when absent → heuristic path; when present → counts are non‑negative and consistent.
 
+<We have completed all of the above, but none of the below>
+
 4) PR‑08B — Baselines knobs & minor nits
    - Parameterize max_tokens in run_freeform_once/run_llmlingua_once; surface via smoke CLI.
    - Add brief comment in build_freeform_prompt explaining lone "Question:" line retention.
@@ -28,3 +30,32 @@ around the current pipeline/baselines without changing research scope.
    - Quick section in README/AGENTS for real‑run setup (Ollama/OpenAI), without making network required.
 
 Note: The evaluation harness and accuracy metrics are planned in RESEARCH_PROPOSAL.md; not tracked here.
+
+6) PR‑12A — Analysis script polish
+   - Add docstring to pareto_frontier() clarifying objective (min tokens, max accuracy).
+   - Sort caps‑ablation buckets deterministically; warn if all overflow_rate values are NaN.
+   - Log discovered run count and skipped dirs to stderr for large trees.
+   - Extend smoke test to assert pareto_points_synth.csv exists.
+
+7) PR‑12D — Enrich metrics ingestion (optional, guarded)
+   - Optionally parse raw_outputs.jsonl for latency quantiles and tokens/SP distributions.
+   - Emit an auxiliary CSV (by_run_ext.csv) instead of bloating by_run.csv.
+   - Keep stdlib+numpy only; avoid pandas.
+
+8) PR‑12R — Real tasks & multi‑point fronts
+   - Produce runs for hotpotqa and gsm8k (offline shards first; real datasets when available).
+   - Generate multiple cap settings for tersetalk (via calibrate_caps or manual grid) to populate ablation figure.
+   - Add a short README section with an example analyze command and expected artifacts.
+
+9) PR‑12V — Visualization extensions (later)
+   - Add SP vs bytes_on_wire scatter per task.
+   - Optional error bars (std or 95% CI) when ≥2 repeats per point; annotate n.
+   - Toggle to label frontier points only (reduce clutter on dense plots).
+
+10) PR‑DX — Make targets for fmt/lint
+    - Add make fmt (black .) and make lint (ruff check .) per repo guide; keep opt‑in.
+    - Document in README/AGENTS and ensure CI (later) uses them.
+
+11) PR‑CI — Headless plots in CI
+    - Add a minimal GH Action that runs pytest (matplotlib Agg) and archives figures from the smoke run.
+    - Ensure caching and timeouts are conservative.

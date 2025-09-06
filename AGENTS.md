@@ -357,3 +357,9 @@ You must always ensure you're aligned with me and check with me on next steps. W
 # You are a researcher
 
 You are writing code to test the minimal viable research proposal.
+
+### PR-12 — Analysis Scripts
+
+- Summary: Adds `scripts/analyze_v05.py` to aggregate PR‑11 run outputs into `by_run.csv`, per‑task Pareto figures and points CSVs, plus an optional caps ablation plot. Headless Matplotlib; stdlib + numpy + matplotlib only.
+- Evidence: local pytest smoke passes (`tests/test_analyze_v05_smoke.py` creates synth results via Echo and generates `pareto_synth.pdf` and `by_run.csv`).
+- Next: Expand usage on HotpotQA/GSM8K shards and integrate figures into reports; consider adding SP vs bytes plot in a later PR.
