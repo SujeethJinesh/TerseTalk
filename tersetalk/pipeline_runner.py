@@ -184,27 +184,38 @@ def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -
     validated_jsonl, stats = validator.validate_and_overflow(manager_jsonl)
     overflow_cnt = _overflow_count(stats)
 
-  # Manager → Worker
+  # Manager → Worker (robust to schema/tool failures)
   t0 = time.perf_counter()
-  worker_lines = client.call_jsonl_strict(
-    system="You are a Worker. Read TerseTalk-JSONL and respond with valid TerseTalk lines.",
-    user_prompt=validated_jsonl,
-    max_tokens=256,
-  )
+  worker_lines: List[TerseTalkLine] = []
+  worker_error: Optional[str] = None
+  try:
+    worker_lines = client.call_jsonl_strict(
+      system="You are a Worker. Read TerseTalk-JSONL and respond with valid TerseTalk lines.",
+      user_prompt=validated_jsonl,
+      max_tokens=256,
+    )
+  except Exception as e:  # pragma: no cover - exercised via tests with fakes
+    worker_error = f"{type(e).__name__}: {e}"
   t1 = time.perf_counter()
 
   # Worker → Critic
-  critic_input = prepare_critic_input(worker_lines, example.get("question"))
-  critic_lines = client.call_jsonl_strict(
-    system="You are a Critic. Verify and emit ['v','A'|'R'|'E'] among your lines.",
-    user_prompt=critic_input,
-    max_tokens=128,
-  )
+  critic_lines: List[TerseTalkLine] = []
+  critic_error: Optional[str] = None
+  if worker_error is None and worker_lines:
+    critic_input = prepare_critic_input(worker_lines, example.get("question"))
+    try:
+      critic_lines = client.call_jsonl_strict(
+        system="You are a Critic. Verify and emit ['v','A'|'R'|'E'] among your lines.",
+        user_prompt=critic_input,
+        max_tokens=128,
+      )
+    except Exception as e:  # pragma: no cover - exercised via tests with fakes
+      critic_error = f"{type(e).__name__}: {e}"
   t2 = time.perf_counter()
 
   # Aggregate outputs
-  worker_jsonl = _jsonl_from_lines(worker_lines)
-  critic_jsonl = _jsonl_from_lines(critic_lines)
+  worker_jsonl = _jsonl_from_lines(worker_lines) if worker_lines else ""
+  critic_jsonl = _jsonl_from_lines(critic_lines) if critic_lines else ""
 
   tokens_total = (
     _approx_tokens(validated_jsonl) + _approx_tokens(worker_jsonl) + _approx_tokens(critic_jsonl)
@@ -213,13 +224,14 @@ def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -
   density = 1.0 - (float(overflow_cnt) / max(1, total_lines))
 
   # Extract answer & verdict
-  answer = extract_answer(worker_lines)
-  verdict = extract_verdict(critic_lines)
+  answer = extract_answer(worker_lines) if worker_lines else ""
+  verdict = extract_verdict(critic_lines) if critic_lines else "A"
 
   # Grab memory stats and reset between tasks (non-leakage)
   mem_stats_before_reset = memory.stats()
   memory.reset()
 
+  status = "ok" if worker_error is None and critic_error is None else "error"
   result = {
     "answer": answer,
     "verdict": verdict,
@@ -236,7 +248,12 @@ def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -
     "worker_jsonl": worker_jsonl,
     "critic_jsonl": critic_jsonl,
     "memory_stats": mem_stats_before_reset,
+    "status": status,
   }
+  if worker_error is not None:
+    result["worker_error"] = worker_error
+  if critic_error is not None:
+    result["critic_error"] = critic_error
   return result
 
 
@@ -245,4 +262,3 @@ def run_pipeline_batch(examples: List[Dict], client: ModelClient, cfg: PipelineC
   for ex in examples:
     out.append(run_pipeline_once(ex, client, cfg))
   return out
-

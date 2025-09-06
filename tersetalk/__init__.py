@@ -15,5 +15,7 @@ __all__ = [
   "pipeline_runner",
   "baselines",
   "results_manager",
+  "metrics",
 ]
+from .metrics import MetricsComputer  # noqa: F401
 from .results_manager import ResultsManager  # noqa: F401
