@@ -20,6 +20,17 @@ except Exception:  # pragma: no cover
   GateCfg = None  # type: ignore
   gate_choose_protocol = None  # type: ignore
 
+# Optional protocol handler imports (dry-run demo)
+try:  # pragma: no cover
+  from tersetalk.protocol_handler import PHConfig, ProtocolHandler
+  from tersetalk.calibration import synth_shard
+  from tersetalk.memory import MemoryStore
+except Exception:  # pragma: no cover
+  PHConfig = None  # type: ignore
+  ProtocolHandler = None  # type: ignore
+  synth_shard = None  # type: ignore
+  MemoryStore = None  # type: ignore
+
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"]) 
 
 
@@ -58,8 +69,15 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 @click.option("--token-budget", default=600, show_default=True, help="Token budget for hybrid gate (dry-run only).")
 @click.option("--gate-jsonl-probe", default=None, help="JSONL probe text for the gate (dry-run only).")
 @click.option("--gate-freeform-probe", default=None, help="Free-form probe text for the gate (dry-run only).")
+@click.option("--preoverflow-ll2/--no-preoverflow-ll2", default=False, show_default=True)
+@click.option("--overflow-ll2/--no-overflow-ll2", default=False, show_default=True)
+@click.option("--deref-ll2/--no-deref-ll2", default=False, show_default=True)
+@click.option("--deref-policy", type=click.Choice(["never", "conditional", "always"]), default="never", show_default=True)
+@click.option("--protocol-demo/--no-protocol-demo", default=False, show_default=True, help="Include a one-sample protocol demo in dry-run.")
 @click.version_option(version=__version__, prog_name="tersetalk v0.5 runner")
-def main(task, system, n, seed, caps, model, out, dry_run, hybrid, token_budget, gate_jsonl_probe, gate_freeform_probe):
+def main(task, system, n, seed, caps, model, out, dry_run,
+         hybrid, token_budget, gate_jsonl_probe, gate_freeform_probe,
+         preoverflow_ll2, overflow_ll2, deref_ll2, deref_policy, protocol_demo):
   """
   TerseTalk v0.5 Runner (PR-01 scaffold)
 
@@ -88,6 +106,12 @@ def main(task, system, n, seed, caps, model, out, dry_run, hybrid, token_budget,
     "out": out,
     "defaults": defaults,
     "mode": "dry-run" if dry_run else "execute",
+    "handler_flags": {
+      "preoverflow_ll2": preoverflow_ll2,
+      "overflow_ll2": overflow_ll2,
+      "deref_ll2": deref_ll2,
+      "deref_policy": deref_policy,
+    }
   }
 
   # Optional gate preview for dry-run
@@ -106,6 +130,32 @@ def main(task, system, n, seed, caps, model, out, dry_run, hybrid, token_budget,
     except Exception as e:  # keep dry-run robust
       gate_obj = {"error": str(e)}
   cfg["gate"] = gate_obj
+
+  # Optional protocol handler demo (dry-run)
+  proto_demo = None
+  if dry_run and protocol_demo and PHConfig and ProtocolHandler and synth_shard and MemoryStore:
+    try:
+      sample = synth_shard(1, int(seed))[0]["jsonl"]
+      phcfg = PHConfig(
+        caps=parsed_caps,
+        summarizer_method="extractive",
+        preoverflow_ll2=preoverflow_ll2,
+        overflow_ll2=overflow_ll2,
+        deref_ll2=deref_ll2,
+        deref_policy=deref_policy,
+      )
+      ph = ProtocolHandler(phcfg)
+      outcome = ph.process(sample, memory=MemoryStore())
+      proto_demo = {
+        "validated_jsonl": outcome.validated_jsonl,
+        "stats_before": outcome.stats_before,
+        "post_deref_jsonl": outcome.post_deref_jsonl,
+        "stats_after": outcome.stats_after,
+        "counters": outcome.counters,
+      }
+    except Exception as e:
+      proto_demo = {"error": str(e)}
+  cfg["protocol_demo"] = proto_demo
 
   click.echo(json.dumps(cfg, indent=2))
 
