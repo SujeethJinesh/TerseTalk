@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import sys
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -190,6 +191,232 @@ def pareto_frontier(points: List[Tuple[float, float]]) -> List[int]:
 
 
 # ----------------------------
+# PR-15 additions: tree aggregation + provenance
+# ----------------------------
+
+def _discover_summary_runs(root: Path) -> List[Path]:
+    return sorted({p.parent for p in root.rglob("summary.json")})
+
+
+def _list_system_jsonls(run_dir: Path) -> Dict[str, Path]:
+    out: Dict[str, Path] = {}
+    for p in run_dir.glob("*.jsonl"):
+        out[p.stem] = p
+    return out
+
+
+def _load_jsonl_rows(jsonl_path: Path):
+    with jsonl_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            s = line.strip()
+            if not s:
+                continue
+            try:
+                yield json.loads(s)
+            except Exception:
+                continue
+
+
+def _summarize_system_file(jsonl_path: Path) -> Optional[Dict[str, float]]:
+    toks: List[float] = []
+    accs: List[float] = []
+    ofl: List[float] = []
+    for r in _load_jsonl_rows(jsonl_path):
+        if str(r.get("status", "success")) == "error":
+            continue
+        t = r.get("tokens_total", r.get("tokens", 0))
+        toks.append(float(t or 0))
+        accs.append(1.0 if r.get("correct") else 0.0)
+        if "overflow_count" in r:
+            try:
+                ofl.append(float(r.get("overflow_count") or 0))
+            except Exception:
+                pass
+    if not toks:
+        return None
+    avg_tokens = float(np.mean(toks))
+    accuracy = float(np.mean(accs))
+    overflow_rate = float(np.mean(ofl)) if ofl else float("nan")
+    return {"avg_tokens": avg_tokens, "accuracy": accuracy, "overflow_rate": overflow_rate}
+
+
+def _save_pareto_points(points: List[Dict[str, float]], out_csv: Path, out_pdf: Path) -> None:
+    # Build frontier flags using existing pareto_frontier helper
+    pairs = [(p["tokens"], p["accuracy"]) for p in points]
+    idx = set(pareto_frontier(pairs))
+    rows = []
+    for i, p in enumerate(points):
+        rows.append({
+            "system": p.get("system", ""),
+            "tokens": float(p.get("tokens", 0.0)),
+            "accuracy": float(p.get("accuracy", 0.0)),
+            "is_pareto": 1 if i in idx else 0,
+        })
+    # CSV
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["system", "tokens", "accuracy", "is_pareto"])
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
+    # Plot
+    fig = plt.figure(figsize=(8, 5))
+    ax = plt.gca()
+    for i, p in enumerate(points):
+        is_front = i in idx
+        ax.scatter(p["tokens"], p["accuracy"], marker=("o" if is_front else "x"))
+        if is_front:
+            ax.annotate(str(p.get("system", "")), (p["tokens"], p["accuracy"]), xytext=(3, 3), textcoords="offset points", fontsize=8)
+    fx = [points[i]["tokens"] for i in sorted(idx, key=lambda j: points[j]["tokens"])]
+    fy = [points[i]["accuracy"] for i in sorted(idx, key=lambda j: points[j]["tokens"])]
+    if len(fx) >= 2:
+        ax.plot(fx, fy, linestyle="--", linewidth=1)
+    ax.set_xlabel("Total Tokens (lower is better)")
+    ax.set_ylabel("Task Accuracy (higher is better)")
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_pdf, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _collect_pareto_points(runs: List[Path]) -> List[Dict[str, float]]:
+    pts: List[Dict[str, float]] = []
+    skipped = 0
+    for run in runs:
+        for name, path in _list_system_jsonls(run).items():
+            s = _summarize_system_file(path)
+            if not s:
+                skipped += 1
+                continue
+            pts.append({"system": name, "tokens": s["avg_tokens"], "accuracy": s["accuracy"]})
+    print(f"[analyze_v05] pareto: {len(pts)} points; skipped {skipped} files", file=sys.stderr)
+    # Deduplicate by (system, tokens, accuracy)
+    uniq: Dict[Tuple[str, float, float], Dict[str, float]] = {}
+    for p in pts:
+        key = (str(p["system"]), round(float(p["tokens"]), 4), round(float(p["accuracy"]), 4))
+        uniq[key] = p
+    return list(uniq.values())
+
+
+def _parse_avg_cap_from_filename(p: Path) -> Optional[float]:
+    name = p.stem
+    # Expect names like tersetalk_f30_p20_q30 or tersetalk_aggressive
+    try:
+        if "_f" in name and "_p" in name and "_q" in name:
+            import re
+            m_f = re.search(r"_f(\d+)", name)
+            m_p = re.search(r"_p(\d+)", name)
+            m_q = re.search(r"_q(\d+)", name)
+            if m_f and m_p and m_q:
+                f = float(m_f.group(1)); pval = float(m_p.group(1)); q = float(m_q.group(1))
+                return float(np.mean([f, pval, q]))
+        mapping = {"aggressive": 20.0, "baseline": 30.0, "relaxed": 50.0, "very_relaxed": 100.0}
+        for k, v in mapping.items():
+            if k in name:
+                return v
+    except Exception:
+        return None
+    return None
+
+
+def _collect_ablation_rows(latest_run: Path) -> List[Dict[str, float]]:
+    rows: List[Dict[str, float]] = []
+    for name, path in _list_system_jsonls(latest_run).items():
+        if not name.startswith("tersetalk"):
+            continue
+        s = _summarize_system_file(path)
+        if not s:
+            continue
+        avg_cap = _parse_avg_cap_from_filename(path)
+        if avg_cap is None:
+            # heuristically use tokens as proxy ordering if caps unknown
+            avg_cap = float(s["avg_tokens"]) if s["avg_tokens"] else 0.0
+        rows.append({
+            "name": name,
+            "avg_cap": float(avg_cap),
+            "tokens": float(s["avg_tokens"]),
+            "accuracy": float(s["accuracy"]),
+            "overflow_rate": float(s["overflow_rate"]),
+        })
+    rows.sort(key=lambda r: r["avg_cap"])  # deterministic
+    return rows
+
+
+def _save_ablation(rows: List[Dict[str, float]], out_csv: Path, out_pdf: Path) -> None:
+    # CSV
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with out_csv.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["name", "avg_cap", "tokens", "accuracy", "overflow_rate"])
+        w.writeheader()
+        for r in rows:
+            w.writerow(r)
+
+    # Plot (1x2)
+    fig = plt.figure(figsize=(12, 5))
+    ax1 = fig.add_subplot(1, 2, 1)
+    ax1.plot([r["avg_cap"] for r in rows], [r["tokens"] for r in rows], marker="o")
+    ax1.set_xlabel("Average Cap Size")
+    ax1.set_ylabel("Total Tokens Used")
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = fig.add_subplot(1, 2, 2)
+    xs = [r["overflow_rate"] for r in rows if not math.isnan(r["overflow_rate"]) ]
+    ys = [r["accuracy"] for r in rows if not math.isnan(r["overflow_rate"]) ]
+    if xs and ys:
+        ax2.plot(xs, ys, marker="o")
+    ax2.set_xlabel("Overflow rate")
+    ax2.set_ylabel("Accuracy")
+    ax2.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    fig.savefig(out_pdf, bbox_inches="tight")
+    plt.close(fig)
+
+
+def _git_short() -> str:
+    try:
+        out = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
+        return out or "unknown"
+    except Exception:
+        return "unknown"
+
+
+def _enrich_summary_with_provenance(summary_path: Path) -> None:
+    try:
+        obj = json.loads(summary_path.read_text(encoding="utf-8"))
+    except Exception:
+        print(f"[analyze_v05] WARN: failed to load summary.json at {summary_path}", file=sys.stderr)
+        return
+    import datetime as _dt
+    for name, stats in obj.items():
+        if not isinstance(stats, dict):
+            continue
+        stats["tokens_method"] = "tiktoken" if _tiktoken_available() else "heuristic"
+        stats["sp_method"] = "bertscore" if _bertscore_available() else "jaccard"
+        stats["timestamp"] = _dt.datetime.now().isoformat()
+        stats["version"] = _git_short()
+    summary_path.write_text(json.dumps(obj, indent=2), encoding="utf-8")
+    print(f"[analyze_v05] enriched provenance in {summary_path}", file=sys.stderr)
+
+
+def _tiktoken_available() -> bool:
+    try:
+        import tiktoken  # type: ignore  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _bertscore_available() -> bool:
+    try:
+        import bert_score  # type: ignore  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+# ----------------------------
 # Plotting
 # ----------------------------
 
@@ -350,6 +577,13 @@ def main():
     ap.add_argument("--system", type=str, action="append", default=None, help="Filter by system (repeatable)")
     ap.add_argument("--format", dest="fmt", choices=["pdf", "png", "svg"], default="pdf", help="Figure format")
     ap.add_argument("--no-annotate", action="store_true", help="Disable point labels on Pareto plots")
+    # PR-15 toggles (default on); allow disabling via --no-*
+    ap.add_argument("--enrich-provenance", dest="enrich_prov", action="store_true", default=True)
+    ap.add_argument("--no-enrich-provenance", dest="enrich_prov", action="store_false")
+    ap.add_argument("--pareto", dest="do_pareto", action="store_true", default=True)
+    ap.add_argument("--no-pareto", dest="do_pareto", action="store_false")
+    ap.add_argument("--ablation", dest="do_ablation", action="store_true", default=True)
+    ap.add_argument("--no-ablation", dest="do_ablation", action="store_false")
     args = ap.parse_args()
 
     indir = Path(args.indir).resolve()
@@ -362,8 +596,7 @@ def main():
 
     run_dirs = _discover_runs(indir)
     if not run_dirs:
-        print(f"[analyze_v05] no run directories found under {indir}", file=sys.stderr)
-        sys.exit(0)
+        print(f"[analyze_v05] no run directories (config.json) found under {indir}", file=sys.stderr)
 
     # Build records
     records: List[RunRecord] = []
@@ -378,15 +611,15 @@ def main():
         records.append(rec)
 
     if not records:
-        print(f"[analyze_v05] no records after filtering", file=sys.stderr)
-        sys.exit(0)
-
-    # Write by_run.csv
-    by_run_rows = _rows_from_records(records)
-    _write_csv(outdir / "by_run.csv", by_run_rows)
+        print(f"[analyze_v05] no records after filtering (by_run.csv skipped)", file=sys.stderr)
+        by_run_rows = []
+    else:
+        # Write by_run.csv
+        by_run_rows = _rows_from_records(records)
+        _write_csv(outdir / "by_run.csv", by_run_rows)
 
     # Unique tasks
-    tasks = sorted({r.task for r in records})
+    tasks = sorted({r.task for r in records}) if records else []
 
     # Pareto plots per task
     for task in tasks:
@@ -401,6 +634,32 @@ def main():
             plot_caps_ablation_for_task(task, by_run_rows, outdir, fmt=args.fmt)
         except Exception as e:
             print(f"[analyze_v05] WARN: caps ablation failed for task={task}: {e}", file=sys.stderr)
+
+    # PR-15: Tree-wide Pareto and latest-run ablation + provenance
+    try:
+        sum_runs = _discover_summary_runs(indir)
+        print(f"[analyze_v05] discovered {len(sum_runs)} run(s) under {indir}", file=sys.stderr)
+        if sum_runs:
+            latest = max(sum_runs, key=lambda p: p.stat().st_mtime)
+            print(f"[analyze_v05] using latest run for ablation: {latest}", file=sys.stderr)
+            if args.do_pareto:
+                points = _collect_pareto_points(sum_runs)
+                if points:
+                    _save_pareto_points(points, outdir / "pareto_points.csv", outdir / "pareto_frontier.pdf")
+            if args.do_ablation:
+                rows = _collect_ablation_rows(latest)
+                if rows:
+                    _save_ablation(rows, outdir / "ablation_caps.csv", outdir / "ablation_caps.pdf")
+                else:
+                    print("[analyze_v05] no tersetalk* jsonl files found for ablation", file=sys.stderr)
+            if args.enrich_prov:
+                sp = latest / "summary.json"
+                if sp.exists():
+                    _enrich_summary_with_provenance(sp)
+                else:
+                    print(f"[analyze_v05] summary.json missing at {sp}", file=sys.stderr)
+    except Exception as e:
+        print(f"[analyze_v05] WARN: PR-15 extras failed: {e}", file=sys.stderr)
 
     print(f"[analyze_v05] Wrote outputs to {outdir}")
 
