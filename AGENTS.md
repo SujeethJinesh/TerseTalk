@@ -59,6 +59,14 @@
   - Metrics: Quality vs Tokens (Pareto), semantic preservation (BERTScore optional), (de)serialization latency, overflow/memory stats.
 - Process: prefer a single CLI runner and CSV outputs; keep UX simple and reproducible; make each unit runnable independently.
 
+### Recent PRs (running log)
+
+- PR‑06 — Dataset Adapters (HotpotQA & GSM8K):
+  - Adds `tersetalk/datasets.py` with `load_hotpotqa()` and `load_gsm8k()` returning normalized examples: {question, answer, facts, subgoal, assumptions}. Deterministic sampling by seed; offline‑first synthetic shards controlled by `TERSETALK_OFFLINE_DATA=1`.
+  - Adds `scripts/datasets_smoke.py` and `tests/test_datasets.py` (determinism, schema, offline behavior; optional real smoke via `RUN_REAL_DATASETS=1`).
+  - Evidence: pytest all green; smoke JSON with `"offline": true` showing two samples per task with all five keys.
+  - Next: Proceed per RESEARCH_PROPOSAL.md to dataset‑driven evaluation wiring and metrics.
+
 ## Claude Code Review Protocol
 
 - Preconditions:
@@ -71,7 +79,7 @@
 
 - Prompt template (reference-only; do not paste file contents):
   - Start with a 1–2 sentence goal and explicit ask for a verdict.
-  - Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` (relevant PR section) first.
+  - Explicitly instruct Claude to read `@RESEARCH_PROPOSAL.md` (relevant PR section) first and judge alignment with its spirit.
   - List edited files using `@` references only (e.g., `@tersetalk/reproducibility.py`, `@tests/test_reproducibility.py`).
   - End with: `If fully acceptable with no nits, explicitly reply: 'Approved: no nits.'`
 

@@ -51,6 +51,7 @@ TerseTalk is a Python-first repository with Make-based tooling for dev tasks. Ou
   - Confirm PR scope aligns with `RESEARCH_PROPOSAL.md` (≤250 LOC where feasible; includes context, before→after, public APIs, tests, DoD). Explicitly call out alignment in your verdict.
   - Confirm minimal deps usage; optional deps are guarded; no unnecessary tool sprawl.
   - Check metrics hooks or placeholders align with the evaluation plan (Quality vs Tokens, SP optional, latency, overflow/memory stats).
+  - Always read `@RESEARCH_PROPOSAL.md` relevant section first and review in its spirit.
 - Referencing code:
   - The agent sends `File: <path>\n---\n<content>` blocks only for files changed.
   - Avoid echoing full files back; refer to filenames and line numbers when helpful.
@@ -195,3 +196,11 @@ GUARDS EARN THEIR KEEP.
 # Reviewing code
 
 You must ensure that code you review follows the above principles
+
+### For PR-06 — Dataset Adapters
+
+- Validate `@tersetalk/datasets.py` provides `load_hotpotqa()` and `load_gsm8k()` returning examples with keys: question, answer (string), facts (list[str]), subgoal (<= ~64 chars), assumptions (list[str]).
+- Confirm deterministic sampling by seed and offline‑first synthetic fallback when `TERSETALK_OFFLINE_DATA=1` or datasets missing.
+- Check `@tests/test_datasets.py` covers determinism, schema, and offline behavior; optional real smoke gated by `RUN_REAL_DATASETS=1`.
+- Smoke: `@scripts/datasets_smoke.py` prints two samples per task with `offline` flag; include JSON in PR description.
+- If fully acceptable, end with exactly: `Approved: no nits.`
