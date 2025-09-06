@@ -221,6 +221,16 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Evidence: pytest all green; run_all --fast JSON shows MB‑1 ≥10× vs uncompiled and >1.4× vs compiled, MB‑2 ≥5×, and MB‑3 JSONL ≤70% of verbose free‑form bytes (lean ratio also reported).
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
 
+- PR-12 — Analysis Scripts:
+  - Summary: Adds `scripts/analyze_v05.py` (by_run.csv, Pareto plots + points CSVs, caps ablation figure/CSV) with headless Matplotlib; stdlib + numpy + matplotlib only; smoke test runs Echo+synth and asserts artifacts.
+  - Evidence: pytest all green; smoke created `by_run.csv` and `pareto_synth.pdf`; CLI works headless.
+  - Next: Populate with HotpotQA/GSM8K runs; consider SP vs bytes-on-wire plot.
+
+- PR-13 — Baselines Parameters & Robustness:
+  - Summary: Parameterizes baselines (`max_tokens`, `target_compression`), adds robust error handling with `status` and `error` fields; extends smoke CLI with `--target-compression`; defaults/back-compat preserved.
+  - Evidence: pytest all green; Echo smoke prints status=success; injected failing client returns status=error with non-negative tokens.
+  - Next: Use knobs in sweeps; surface error counts in summaries/analysis.
+
 THE MAKE IT WORK FIRST FIELD GUIDE
 
 CORE TRUTH
