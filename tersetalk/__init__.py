@@ -9,4 +9,5 @@ __all__ = [
   "summarization",
   "hybrid_gate",
   "noninferiority",
+  "protocol_handler",
 ]
