@@ -14,6 +14,7 @@ def main():
   ap.add_argument("--task", choices=["hotpotqa", "gsm8k"], default="hotpotqa")
   ap.add_argument("--seed", type=int, default=0)
   ap.add_argument("--offline", action="store_true")
+  ap.add_argument("--model", choices=["echo", "real"], default="echo")
   ap.add_argument("--caps", default='{"f":30,"p":20,"q":30,"g":30,"u":20,"t":50}')
   ap.add_argument("--use-handler", action="store_true", help="Use protocol handler if available")
   ap.add_argument("--preoverflow-ll2", action="store_true")
@@ -38,11 +39,17 @@ def main():
     deref_ll2=args.deref_ll2,
     deref_policy=args.deref_policy,
   )
-  client = EchoModel()
+  if args.model == "real":
+    if os.environ.get("RUN_REAL_MODEL") != "1":
+      print("SKIP: real model not enabled (set RUN_REAL_MODEL=1)")
+      return
+    from tersetalk.model_io import ModelClient
+    client = ModelClient()
+  else:
+    client = EchoModel()
   res = run_pipeline_once(ex, client, cfg)
   print(json.dumps(res, indent=2))
 
 
 if __name__ == "__main__":
   main()
-

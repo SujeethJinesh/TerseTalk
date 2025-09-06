@@ -14,6 +14,7 @@ def main():
   ap.add_argument("--task", choices=["hotpotqa", "gsm8k"], default="hotpotqa")
   ap.add_argument("--seed", type=int, default=0)
   ap.add_argument("--offline", action="store_true")
+  ap.add_argument("--model", choices=["echo", "real"], default="echo")
   ap.add_argument("--disable-ll2", action="store_true", help="Force disable LLMLingua via env")
   args = ap.parse_args()
 
@@ -27,7 +28,14 @@ def main():
   else:
     ex = load_gsm8k(n=1, seed=args.seed, offline=offline)[0]
 
-  client = EchoModel()
+  if args.model == "real":
+    if os.environ.get("RUN_REAL_MODEL") != "1":
+      print("SKIP: real model not enabled (set RUN_REAL_MODEL=1)")
+      return
+    from tersetalk.model_io import ModelClient
+    client = ModelClient()
+  else:
+    client = EchoModel()
 
   print("=== Free-form baseline ===")
   res_free = run_freeform_once(ex, client)
@@ -40,4 +48,3 @@ def main():
 
 if __name__ == "__main__":
   main()
-
