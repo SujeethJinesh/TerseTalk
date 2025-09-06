@@ -88,7 +88,10 @@ def main(task, systems, n, seed, caps_grid, model, out, dry_run):
 
     def evaluate_answer(ex: Dict, ans: str) -> bool:
         gold = str(ex.get('answer', ''))
-        return mc.exact_match(ans, gold) if task == 'hotpotqa' else mc.gsm8k_correct(ans, gold)
+        try:
+            return mc.exact_match(ans, gold) if task == 'hotpotqa' else mc.gsm8k_correct(ans, gold)
+        except Exception:
+            return False
 
     def run_tersetalk(examples: List[Dict], caps: Dict[str, int]) -> List[Dict]:
         cfg = PipelineConfig(caps=caps, use_protocol_handler=False, deref_policy='never')
