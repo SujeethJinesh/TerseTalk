@@ -26,10 +26,13 @@ def _deterministic_indices(total: int, n: int, seed: int) -> List[int]:
 def _shorten(text: str, max_chars: int = 64) -> str:
     if len(text) <= max_chars:
         return text
-    cut = text[: max_chars]
-    sp = cut.rfind(" ")
+    base = text[: max_chars]
+    sp = base.rfind(" ")
     if sp >= 16:
-        cut = cut[:sp]
+        cut = base[:sp]
+    else:
+        # Ensure room for ellipsis when no reasonable space to cut on
+        cut = text[: max(0, max_chars - 3)]
     return cut.rstrip() + "..."
 
 
@@ -128,9 +131,7 @@ def _hotpot_supporting_sentences(item: Dict[str, Any]) -> List[str]:
             if isinstance(sent, str):
                 facts.append(f"{title}: {sent}")
     if not facts:  # safe fallback
-        for title, sents in ctx_pairs[:2]:
-            if sents:
-                facts.append(f"{title}: {sents[0]}")
+        facts = [f"{title}: {sents[0]}" for title, sents in ctx_pairs[:2] if sents]
     # de-dup and cap
     seen = set()
     uniq: List[str] = []
@@ -200,7 +201,7 @@ def _gsm8k_extract_answer(ans: str) -> str:
         return str(ans)
     s = ans.strip()
     if "####" in s:
-        tail = s.split("####")[-1].strip()  # keep as string but strip spaces
+        tail = s.split("####", 1)[-1].strip()  # keep as string but strip spaces
         return tail
     return s
 
@@ -249,4 +250,3 @@ def load_gsm8k(
             }
         )
     return out
-
