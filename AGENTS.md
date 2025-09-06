@@ -61,6 +61,12 @@
 
 ### Recent PRs (running log)
 
+- PR‑07 — Pipeline Runner (Manager→Worker→Critic):
+  - Adds `tersetalk/pipeline_runner.py` with `PipelineConfig`, message builders, extractors, and `run_pipeline_once/batch` using `MemoryStore` + `JSONLValidator` (optional `ProtocolHandler`).
+  - Adds `scripts/pipeline_smoke.py` and `tests/test_pipeline_runner.py` (Echo model + synthetic data; determinism and density/overflow behavior).
+  - Evidence: pytest all green; smoke shows loose caps (density≈1.0, low overflow) vs tight caps (lower density, higher overflow).
+  - Summary: Echo model yields deterministic outputs; manager message density drops as caps tighten; tokens_total and latency_ms reported.
+
 - PR‑06 — Dataset Adapters (HotpotQA & GSM8K):
   - Adds `tersetalk/datasets.py` with `load_hotpotqa()` and `load_gsm8k()` returning normalized examples: {question, answer, facts, subgoal, assumptions}. Deterministic sampling by seed; offline‑first synthetic shards controlled by `TERSETALK_OFFLINE_DATA=1`.
   - Adds `scripts/datasets_smoke.py` and `tests/test_datasets.py` (determinism, schema, offline behavior; optional real smoke via `RUN_REAL_DATASETS=1`).
