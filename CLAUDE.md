@@ -204,3 +204,13 @@ You must ensure that code you review follows the above principles
 - Check `@tests/test_datasets.py` covers determinism, schema, and offline behavior; optional real smoke gated by `RUN_REAL_DATASETS=1`.
 - Smoke: `@scripts/datasets_smoke.py` prints two samples per task with `offline` flag; include JSON in PR description.
 - If fully acceptable, end with exactly: `Approved: no nits.`
+- For PR-07 — Pipeline Runner (Manager→Worker→Critic)
+
+- Validate `@tersetalk/pipeline_runner.py` provides:
+  - `PipelineConfig`, `build_manager_message`, `prepare_critic_input`, `extract_answer`, `extract_verdict`, `run_pipeline_once`, `run_pipeline_batch`.
+  - Uses `JSONLValidator` + `MemoryStore`; optional `ProtocolHandler` path guarded.
+  - Returns rich result dict with answer, verdict, tokens_total, overflow_count, density, latency_ms, sp_reference, manager/worker/critic JSONL, and memory_stats.
+- Check `@tests/test_pipeline_runner.py` covers schema and density behavior (loose vs tight caps) and determinism with Echo model + synthetic data.
+- Smoke: `@scripts/pipeline_smoke.py` prints one result JSON for Echo + synthetic tasks; include loose vs tight caps snippets in PR body.
+- Ensure reference to `@RESEARCH_PROPOSAL.md` (pipeline section) guides the review for alignment and scope.
+- If fully acceptable, end with exactly: `Approved: no nits.`

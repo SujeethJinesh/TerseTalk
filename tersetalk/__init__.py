@@ -12,4 +12,5 @@ __all__ = [
   "protocol_handler",
   "model_io",
   "datasets",
+  "pipeline_runner",
 ]
