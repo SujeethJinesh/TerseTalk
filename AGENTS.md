@@ -83,6 +83,10 @@
 ## Real Runs & Analysis (ongoing discipline)
 
 - For every PR, include a small real‑run snippet (opt‑in via `RUN_REAL_MODEL=1`) for baselines and, when robust, the pipeline. Report: tokens, latency, and brief qualitative accuracy (e.g., EM snippet or numeric correctness on GSM8K item).
+- Default “real model” runs are local via Ollama (OpenAI‑compatible):
+  - base_url: `http://localhost:11434/v1`, api_key: `ollama`, model from `OLLAMA_MODEL`.
+  - Avoid mocks/fakes; EchoModel is only for offline smoke and unit tests.
+  - Preferred quick models locally: `phi:latest` or similar lightweight variants.
 - Provide a sober analysis vs figures of merit (e.g., token reduction targets, failure rate, density), call out limitations (heuristic tokens, randomness), and avoid overstated claims.
 - If real runs are blocked (e.g., model schema/tooling), document the root cause and the follow‑up PR fixing it.
 
@@ -220,6 +224,13 @@ Record a brief summary after each PR is merged to accelerate context-loading in 
   - Summary: Adds `benchmarks/` package (MB‑1 tag extraction, MB‑2 streaming boundaries, MB‑3 SerDe/bytes) with a `run_all` runner and tests. Optional msgpack is guard‑checked.
   - Evidence: pytest all green; run_all --fast JSON shows MB‑1 ≥10× vs uncompiled and >1.4× vs compiled, MB‑2 ≥5×, and MB‑3 JSONL ≤70% of verbose free‑form bytes (lean ratio also reported).
   - Next: Proceed to pipeline/evaluation PRs per `RESEARCH_PROPOSAL.md`.
+
+- PR‑14 — Evaluation Driver:
+  - Summary: Adds `scripts/run_evaluation.py` to run tersetalk/freeform/llmlingua/hybrid over a caps grid and hybrid budgets; saves per‑system JSONL + summary.json; offline‑safe.
+  - Evidence: pytest green; local real runs (Ollama `phi:latest`) with n=3:
+    - hotpotqa/freeform → avg_tokens≈455.0, accuracy=0.00, compliance=1.00
+    - gsm8k/freeform → avg_tokens≈221.0, accuracy=0.00, compliance=1.00
+  - Next: Expand to tersetalk/hybrid on small n; feed outputs to PR‑12 analysis for Pareto/ablation.
 
 - PR-12 — Analysis Scripts:
   - Summary: Adds `scripts/analyze_v05.py` (by_run.csv, Pareto plots + points CSVs, caps ablation figure/CSV) with headless Matplotlib; stdlib + numpy + matplotlib only; smoke test runs Echo+synth and asserts artifacts.
