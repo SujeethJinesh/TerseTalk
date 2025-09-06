@@ -61,6 +61,13 @@
 
 ### Recent PRs (running log)
 
+
+- PR‑08B — Baselines knobs & minor nits:
+  - Parameterize max_tokens in baselines and smoke; include origin/compressed prompts. Echo determinism unchanged; schema intact.
+
+- PR‑11 — Experiment Driver (scripts/run_v05.py):
+  - CLI runs {tersetalk|freeform|llmlingua} on {hotpotqa|gsm8k|synth}; saves config.json, raw_outputs.jsonl, metrics.csv, summary.json via ResultsManager; supports resume and SIGINT-safe flush. Compatible with --help/--version/--dry-run.
+
 - PR‑07 — Pipeline Runner (Manager→Worker→Critic):
   - Adds `tersetalk/pipeline_runner.py` with `PipelineConfig`, message builders, extractors, and `run_pipeline_once/batch` using `MemoryStore` + `JSONLValidator` (optional `ProtocolHandler`).
   - Adds `scripts/pipeline_smoke.py` and `tests/test_pipeline_runner.py` (Echo model + synthetic data; determinism and density/overflow behavior).
