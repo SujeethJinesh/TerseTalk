@@ -11,4 +11,5 @@ __all__ = [
   "noninferiority",
   "protocol_handler",
   "model_io",
+  "datasets",
 ]
