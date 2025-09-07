@@ -202,7 +202,20 @@ def run_pipeline_once(
       max_tokens=256,
     )
   except Exception as e:  # pragma: no cover - exercised via tests with fakes
-    worker_error = f"{type(e).__name__}: {e}"
+    # Fallback: request a concise final answer via text, then wrap as a simple TerseTalk line
+    try:
+      text = (client_worker or client).call_text(
+        system="You are a Worker. Read the JSONL and provide a concise final answer only.",
+        user_prompt=validated_jsonl,
+        max_tokens=128,
+      )
+      if text:
+        worker_lines = [TerseTalkLine(tag="f", payload=[text.strip()])]
+        worker_error = None  # consider fallback success
+      else:
+        worker_error = f"{type(e).__name__}: {e}"
+    except Exception as e2:
+      worker_error = f"{type(e).__name__}: {e}; FallbackError: {type(e2).__name__}: {e2}"
   t1 = time.perf_counter()
 
   # Worker → Critic
