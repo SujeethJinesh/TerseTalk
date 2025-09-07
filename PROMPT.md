@@ -2,282 +2,53 @@ Read through your @AGENTS.md and ensure you follow that precisely. Make sure you
 
 ### PR Summary
 
-PR‑16 — Statistical Significance & Non‑Inferiority (offline‑safe)
+PR‑17 — Finalization Plan: Real Runs, Analysis, and Comparison Integrity
 
-Goal (≤250 LOC total):
-Add a tiny stats helper and a one‑shot CLI to produce paper‑grade significance outputs without SciPy (stdlib + numpy only). We report:
+Focus (≤250 LOC per PR; minimal diffs):
+- Run real local models via Ollama on real tasks; debug issues in the pipeline path.
+- Generate consistent, audit‑ready figures and stats for TerseTalk vs baselines.
+- Tighten comparison correctness: same examples, same seeds, paired analyses.
 
-Token reduction significance (paired, per‑item % reduction).
+Plan (phased)
+- Refactors/Polish (small, high‑impact):
+  - Per‑role models/timeouts: allow `--worker-model`/`--critic-model` in eval; set per‑call timeouts; lower temp (≈0.2) and raise max_tokens modestly.
+  - Instructor fallback: if structured parse fails on Ollama, downgrade Worker/Critic to text path with a typed shim (still recorded in status).
+  - Naming consistency: ensure tersetalk outputs include cap tuple and a `tersetalk_baseline.jsonl` symlink for significance.
+  - Determinism: ensure seeds and n are consistent across all systems; pair by index; log skipped/error rows.
 
-Quality preservation (TerseTalk − Free‑form accuracy, CI).
+- Real‑Run Matrix (initial):
+  - Tasks: hotpotqa, gsm8k
+  - Systems: tersetalk, freeform, llmlingua, hybrid
+  - Models: llama3.1:8b (primary), phi:latest (fallback for smoke)
+  - N×seeds: {n=50, seeds [0,42]} initial; {n=200+} later if stable
+  - Caps grid (terse): {(20,15,20), (30,20,30), (50,40,50)}; Hybrid budgets: {400,600,800}
 
-Hybrid non‑inferiority vs LLMLingua (δ = 0.02 absolute accuracy).
+- Execution (commands):
+  - Evaluate:
+    - `export OLLAMA_MODEL="llama3.1:8b"`
+    - `python scripts/run_evaluation.py --task hotpotqa --systems tersetalk freeform llmlingua hybrid --n 50 --seed 0 --model $OLLAMA_MODEL --out results/eval_llama31`
+    - Repeat for gsm8k and seed 42
+  - Analyze:
+    - `python scripts/analyze_v05.py --indir results/eval_llama31 --outdir results/eval_llama31/figures`
+    - Artifacts: `by_run.csv`, `pareto_points.csv`, `pareto_frontier.pdf`, `ablation_caps.{csv,pdf}`
+  - Significance:
+    - `python scripts/run_significance.py --results-dir results/eval_llama31/<task>/<timestamp> --boots 5000`
+    - Artifacts: `significance_tests.json` + console lines
 
-Outputs are JSON + human‑readable console lines.
+- Comparison correctness:
+  - Pairing by index across systems (truncate to common length) for tokens & accuracy.
+  - Use the same examples (seeded loaders), same model, same n for all systems.
+  - Report compliance rate and status/error counts to ensure fair “n”.
+  - SP method explicitly recorded (jaccard vs bertscore) and consistent per run.
 
-Scope & constraints
+- Risks & mitigations:
+  - Slow inference on llama3.1:8b → start with n=10–50; extend timeouts; batch serially.
+  - Structured schema failures → Instructor fallback; record status; don’t crash.
+  - LLMLingua unavailable → guarded fallback already present; label runs properly.
+  - Low accuracy for small models → document; emphasize token savings and non‑inferiority when applicable.
 
-No new heavy deps: only numpy (already present).
-
-No pandas, no SciPy; use bootstrap for CIs & one‑sided p-values.
-
-Works on JSONL files emitted by PR‑14 (e.g., tersetalk_baseline.jsonl, freeform.jsonl, llmlingua.jsonl, hybrid_budget_600.jsonl).
-
-Robust to missing fields (tokens_total vs tokens, missing correct → treated as 0.0).
-
-Pairing is by row index (truncate to the common length).
-
-Files (NEW)
-
-tersetalk/statistics.py — small, reusable bootstrap & tests.
-
-scripts/run_significance.py — CLI that loads JSONL, runs tests, writes results.
-
-Implementation
-
-1. tersetalk/statistics.py (NEW, ~90 LOC)
-
-# tersetalk/statistics.py
-
-from **future** import annotations
-import numpy as np
-from typing import List, Tuple, Dict
-
-def \_rng(seed: int | None = None):
-return np.random.default_rng(seed)
-
-def bootstrap*ci_diff(a: List[float], b: List[float],
-n_boot: int = 5000, conf: float = 0.95,
-paired: bool = True, seed: int | None = None
-) -> Tuple[float, float, float]:
-"""Bootstrap CI for mean(a - b). Paired by index by default."""
-a, b = np.asarray(a, float), np.asarray(b, float)
-n = min(len(a), len(b))
-a, b = a[:n], b[:n]
-if n == 0:
-return float("nan"), float("nan"), float("nan")
-r = \_rng(seed)
-diffs = []
-if paired:
-idx = np.arange(n)
-for * in range(n*boot):
-s = r.choice(idx, size=n, replace=True)
-diffs.append(np.mean(a[s] - b[s]))
-else:
-for * in range(n_boot):
-s1 = r.choice(a, size=n, replace=True)
-s2 = r.choice(b, size=n, replace=True)
-diffs.append(np.mean(s1 - s2))
-diffs = np.asarray(diffs)
-mean = float(np.mean(a - b))
-alpha = (1.0 - conf) / 2.0
-lo = float(np.quantile(diffs, alpha))
-hi = float(np.quantile(diffs, 1 - alpha))
-return mean, lo, hi
-
-def percent_reduction(before: List[float], after: List[float]) -> List[float]:
-"""Per-item % reduction: (before - after) / max(before, eps)."""
-eps = 1e-9
-before, after = np.asarray(before, float), np.asarray(after, float)
-n = min(len(before), len(after))
-if n == 0:
-return []
-b = before[:n]
-a = after[:n]
-return ((b - a) / np.maximum(b, eps)).tolist()
-
-def bootstrap*mean_ci(x: List[float], n_boot: int = 5000,
-conf: float = 0.95, seed: int | None = None
-) -> Tuple[float, float, float]:
-"""Bootstrap CI for mean(x)."""
-x = np.asarray(x, float)
-if len(x) == 0:
-return float("nan"), float("nan"), float("nan")
-r = \_rng(seed)
-means = []
-for * in range(n_boot):
-s = r.choice(x, size=len(x), replace=True)
-means.append(np.mean(s))
-means = np.asarray(means)
-alpha = (1.0 - conf) / 2.0
-return float(np.mean(x)), float(np.quantile(means, alpha)), float(np.quantile(means, 1 - alpha))
-
-def one*sided_p_gt_zero(x: List[float], n_boot: int = 10000, seed: int | None = None) -> float:
-"""Approximate one-sided p-value that mean(x) <= 0 via bootstrap."""
-x = np.asarray(x, float)
-if len(x) == 0:
-return float("nan")
-r = \_rng(seed)
-cnt = 0
-for * in range(n_boot):
-s = r.choice(x, size=len(x), replace=True)
-if np.mean(s) <= 0.0:
-cnt += 1
-return cnt / n_boot
-
-def noninferiority(treatment_acc: List[float], control_acc: List[float],
-delta: float = 0.02, conf: float = 0.95,
-seed: int | None = None) -> Dict[str, float | bool]:
-"""
-H0: treat - control < -δ; H1: treat - control >= -δ.
-Pass if CI_lower > -δ.
-"""
-mean, lo, hi = bootstrap_ci_diff(treatment_acc, control_acc, conf=conf, paired=True, seed=seed)
-return {
-"mean_difference": float(mean),
-"ci_lower": float(lo),
-"ci_upper": float(hi),
-"delta": float(delta),
-"is_noninferior": bool(lo > -delta),
-}
-
-2. scripts/run_significance.py (NEW, ~130–150 LOC)
-
-# scripts/run_significance.py
-
-import json, sys
-from pathlib import Path
-from typing import Tuple, List
-import click
-import numpy as np
-from tersetalk.statistics import (
-percent_reduction, bootstrap_mean_ci,
-bootstrap_ci_diff, one_sided_p_gt_zero, noninferiority,
-)
-
-def load_tokens_acc(path: Path) -> Tuple[List[float], List[float]]:
-toks, acc = [], []
-if not path.exists():
-return toks, acc
-with path.open() as f:
-for line in f:
-line = line.strip()
-if not line:
-continue
-try:
-r = json.loads(line)
-except Exception:
-continue
-if r.get("status") == "error":
-continue
-tok = r.get("tokens_total", r.get("tokens", None))
-if tok is not None:
-toks.append(float(tok)) # default 0.0 if unknown correctness
-acc.append(1.0 if r.get("correct") else 0.0)
-return toks, acc
-
-@click.command()
-@click.option("--results-dir", type=Path, required=True)
-@click.option("--terse-file", default="tersetalk_baseline.jsonl")
-@click.option("--free-file", default="freeform.jsonl")
-@click.option("--ll2-file", default="llmlingua.jsonl")
-@click.option("--hybrid-file",default="hybrid_budget_600.jsonl")
-@click.option("--confidence", default=0.95, show_default=True)
-@click.option("--boots", default=5000, show_default=True)
-@click.option("--out", default="significance_tests.json", show_default=True)
-def main(results_dir, terse_file, free_file, ll2_file, hybrid_file, confidence, boots, out):
-"""Run significance tests for token reduction, quality, and non-inferiority."""
-terse_t, terse_a = load_tokens_acc(results_dir / terse_file)
-free_t, free_a = load_tokens_acc(results_dir / free_file)
-ll2_t, ll2_a = load_tokens_acc(results_dir / ll2_file)
-hyb_t, hyb_a = load_tokens_acc(results_dir / hybrid_file)
-
-    report = {}
-
-    # 1) Token reduction: per-item % reduction (freeform → tersetalk), paired
-    pct = percent_reduction(free_t, terse_t)
-    mean_pct, lo_pct, hi_pct = bootstrap_mean_ci(pct, n_boot=boots, conf=confidence)
-    p_one_sided = one_sided_p_gt_zero(pct, n_boot=max(boots, 5000))
-    report["token_reduction"] = {
-        "mean_reduction_pct": float(mean_pct),
-        "ci_lower": float(lo_pct),
-        "ci_upper": float(hi_pct),
-        "p_one_sided_gt0": float(p_one_sided),
-        "n": len(pct)
-    }
-
-    # 2) Quality preservation: accuracy(terse) - accuracy(freeform)
-    mean_q, lo_q, hi_q = bootstrap_ci_diff(terse_a, free_a, n_boot=boots, conf=confidence, paired=True)
-    report["quality_preservation"] = {
-        "mean_diff": float(mean_q),
-        "ci_lower": float(lo_q),
-        "ci_upper": float(hi_q),
-        "n": int(min(len(terse_a), len(free_a)))
-    }
-
-    # 3) Hybrid non-inferiority vs LLMLingua
-    report["hybrid_noninferiority"] = noninferiority(hyb_a, ll2_a, delta=0.02, conf=confidence)
-
-    # Print concise summary
-    print("\n" + "="*60)
-    print("SIGNIFICANCE RESULTS")
-    print("="*60)
-    tr = report["token_reduction"]
-    print(f"Token Reduction (free→terse): {tr['mean_reduction_pct']:.1%} "
-          f"[{tr['ci_lower']:.1%}, {tr['ci_upper']:.1%}]  "
-          f"p(one‑sided>0)={tr['p_one_sided_gt0']:.4f}  n={tr['n']}")
-    qp = report["quality_preservation"]
-    print(f"Quality Δ (terse‑free): {qp['mean_diff']:.3f} "
-          f"[{qp['ci_lower']:.3f}, {qp['ci_upper']:.3f}]  n={qp['n']}")
-    hi = report["hybrid_noninferiority"]
-    print(f"Hybrid vs LLMLingua Non‑Inferiority (δ=0.02): "
-          f"{'PASS' if hi['is_noninferior'] else 'FAIL'}; "
-          f"Δ={hi['mean_difference']:.3f}, CI=[{hi['ci_lower']:.3f},{hi['ci_upper']:.3f}]")
-
-    # Save full JSON
-    out_path = results_dir / out
-    out_path.write_text(json.dumps(report, indent=2))
-    print(f"\nSaved: {out_path}")
-
-if **name** == "**main**":
-main()
-
-Tests (NEW, tiny)
-
-tests/test_statistics_smoke.py (~35 LOC)
-
-from pathlib import Path
-import subprocess, sys, json
-
-def test_significance_smoke(tmp_path: Path):
-d = tmp_path / "runs"
-d.mkdir() # Minimal aligned rows: freeform worse tokens, same accuracy; hybrid ~ ll2
-(d / "freeform.jsonl").write_text('{"tokens":100,"correct":true,"status":"success"}\n')
-(d / "tersetalk_baseline.jsonl").write_text('{"tokens":60,"correct":true,"status":"success"}\n')
-(d / "llmlingua.jsonl").write_text('{"tokens":70,"correct":true,"status":"success"}\n')
-(d / "hybrid_budget_600.jsonl").write_text('{"tokens":65,"correct":true,"status":"success"}\n')
-
-    cmd = [sys.executable, "scripts/run_significance.py", "--results-dir", str(d), "--boots", "2000"]
-    subprocess.run(cmd, check=True)
-    out = json.loads((d / "significance_tests.json").read_text())
-    assert "token_reduction" in out and out["token_reduction"]["n"] == 1
-    assert "hybrid_noninferiority" in out
-
-Definition of Done
-
-python scripts/run_significance.py --results-dir results/evaluation/TASK/seed_42:
-
-Prints three lines (token reduction, quality Δ, non‑inferiority PASS/FAIL).
-
-Writes significance_tests.json with:
-
-token_reduction: mean_reduction_pct, ci_lower, ci_upper, p_one_sided_gt0, n
-
-quality_preservation: mean_diff, ci_lower, ci_upper, n
-
-hybrid_noninferiority: mean_difference, ci_lower, ci_upper, delta, is_noninferior
-
-Handles missing files gracefully (n=0 → NaNs, still emits JSON).
-
-Keeps total new code ≤250 LOC (library + script + smoke test, comments minimal).
-
-No SciPy; offline‑safe.
-
-Out of scope
-
-Multiple‑comparison corrections, Bayesian tests, or stratified analysis by task subsets.
-
-Fancy tables/plots (handled by PR‑15).
-
-Branch name: pr-16-significance
-Commit msg: PR-16: Bootstrap significance + non-inferiority CLI (numpy-only, offline-safe)
+- DoD (acceptance):
+  - Real runs (no Echo) complete for both tasks at n≥50 without crashes.
+  - Figures: Pareto & ablation generated and committed as artifacts.
+  - Significance JSON produced with meaningful (non‑NaN) results for all three tests.
+  - PRs include concise evidence (paths + screenshots) and pass Claude review with “Approved: no nits.”
