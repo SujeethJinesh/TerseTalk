@@ -2,7 +2,37 @@ Read through your @AGENTS.md and ensure you follow that precisely. Make sure you
 
 ### PR Summary
 
-PR‑17 — Finalization Plan: Real Runs, Analysis, and Comparison Integrity
+PR‑20 — Instruct Model Runs (n=2) + Strict Generation Settings
+
+Scope (≤250 LOC where needed):
+- Use Ollama instruct model `llama3.1:8b-instruct-q8_0` where available
+- Run paired, real‑data evaluations with strict generation settings
+- Produce initial figures and significance (n=2) to validate plumbing
+
+Settings
+- Temperature: 0.2; max_tokens: 256–384 where applicable
+- Systems: tersetalk (with Worker fallback), freeform (final answer only), hybrid (if time permits), llmlingua (guarded fallback)
+- Tasks: hotpotqa and gsm8k; Seeds: [0]
+- Per‑role models: set Worker/Critic to instruct model when available
+
+Commands (example)
+- export OLLAMA_MODEL="llama3.1:8b-instruct-q8_0"
+- python scripts/run_evaluation.py --task hotpotqa --systems tersetalk freeform --n 2 --seed 0 --model "$OLLAMA_MODEL"   --worker-model "$OLLAMA_MODEL" --critic-model "$OLLAMA_MODEL" --temperature 0.2 --out results/eval_instruct
+- Repeat for gsm8k
+
+Analysis
+- python scripts/analyze_v05.py --indir results/eval_instruct --outdir results/eval_instruct/figures
+- Artifacts: pareto_points.csv, pareto_frontier.pdf, ablation_caps.{csv,pdf}
+
+Significance (paired)
+- python scripts/run_significance.py --results-dir results/eval_instruct/<task>/<timestamp> --boots 2000
+- Uses tersetalk_baseline.jsonl symlink and freeform.jsonl in the same run dir
+
+Acceptance
+- Both tasks produce non‑NaN paired stats for token reduction and quality Δ
+- Pareto/ablation artifacts saved; console summaries present
+- Short analysis note in PR body: token savings, EM deltas, any anomalies (guarded paths)
+
 
 Focus (≤250 LOC per PR; minimal diffs):
 - Run real local models via Ollama on real tasks; debug issues in the pipeline path.
