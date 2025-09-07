@@ -143,7 +143,13 @@ def extract_verdict(critic_lines: List[TerseTalkLine]) -> str:
 # ---------------------------
 
 
-def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -> Dict:
+def run_pipeline_once(
+  example: Dict,
+  client: ModelClient,
+  cfg: PipelineConfig,
+  client_worker: Optional[ModelClient] = None,
+  client_critic: Optional[ModelClient] = None,
+) -> Dict:
   """
   Manager → Worker → Critic, single pass (manager-coordinated).
   - Validates Manager JSONL (caps/overflow)
@@ -189,7 +195,8 @@ def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -
   worker_lines: List[TerseTalkLine] = []
   worker_error: Optional[str] = None
   try:
-    worker_lines = client.call_jsonl_strict(
+    c_w = client_worker or client
+    worker_lines = c_w.call_jsonl_strict(
       system="You are a Worker. Read TerseTalk-JSONL and respond with valid TerseTalk lines.",
       user_prompt=validated_jsonl,
       max_tokens=256,
@@ -204,7 +211,8 @@ def run_pipeline_once(example: Dict, client: ModelClient, cfg: PipelineConfig) -
   if worker_error is None and worker_lines:
     critic_input = prepare_critic_input(worker_lines, example.get("question"))
     try:
-      critic_lines = client.call_jsonl_strict(
+      c_c = client_critic or client
+      critic_lines = c_c.call_jsonl_strict(
         system="You are a Critic. Verify and emit ['v','A'|'R'|'E'] among your lines.",
         user_prompt=critic_input,
         max_tokens=128,

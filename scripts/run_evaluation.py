@@ -68,8 +68,10 @@ def _save_jsonl(run_dir: Path, name: str, rows: List[Dict]) -> None:
 @click.option('--caps-grid/--no-caps-grid', default=True, show_default=True)
 @click.option('--model', default='echo', show_default=True)
 @click.option('--out', default='results/evaluation', show_default=True)
+@click.option('--worker-model', type=str, default=None, help='Override model for Worker role')
+@click.option('--critic-model', type=str, default=None, help='Override model for Critic role')
 @click.option('--dry-run', is_flag=True, help='Use n=10 and echo model')
-def main(task, systems, n, seed, caps_grid, model, out, dry_run):
+def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_model, dry_run):
     """Run v0.5 evaluation across systems; save JSONL and summary.json (offline-safe)."""
     set_global_seed(seed)
     if dry_run:
@@ -84,6 +86,15 @@ def main(task, systems, n, seed, caps_grid, model, out, dry_run):
 
     # Model
     client = EchoModel() if (model or '').lower() == 'echo' else ModelClient()
+    # Optional per-role clients for Worker/Critic
+    worker_client = None
+    critic_client = None
+    if worker_model and (worker_model.strip().lower() != 'echo'):
+        from tersetalk.model_io import ModelCfg
+        worker_client = ModelClient(ModelCfg(model=worker_model))
+    if critic_model and (critic_model.strip().lower() != 'echo'):
+        from tersetalk.model_io import ModelCfg
+        critic_client = ModelClient(ModelCfg(model=critic_model))
     mc = MetricsComputer()
 
     def evaluate_answer(ex: Dict, ans: str) -> bool:
@@ -97,7 +108,7 @@ def main(task, systems, n, seed, caps_grid, model, out, dry_run):
         cfg = PipelineConfig(caps=caps, use_protocol_handler=False, deref_policy='never')
         rows: List[Dict] = []
         for ex in tqdm(examples, desc=f"tersetalk caps={caps}"):
-            r = run_pipeline_once(ex, client, cfg)
+            r = run_pipeline_once(ex, client, cfg, client_worker=worker_client, client_critic=critic_client)
             ans = str(r.get('answer', ''))
             r['correct'] = bool(evaluate_answer(ex, ans))
             r['tokens'] = int(r.get('tokens_total', 0))
@@ -116,7 +127,7 @@ def main(task, systems, n, seed, caps_grid, model, out, dry_run):
                 r = run_llmlingua_once(ex, client)
                 tokens = int(r.get('tokens_total') or r.get('tokens') or 0)
             else:
-                r = run_pipeline_once(ex, client, PipelineConfig(caps=caps, use_protocol_handler=False))
+                r = run_pipeline_once(ex, client, PipelineConfig(caps=caps, use_protocol_handler=False), client_worker=worker_client, client_critic=critic_client)
                 tokens = int(r.get('tokens_total', 0))
             ans = str(r.get('answer', ''))
             r['correct'] = bool(evaluate_answer(ex, ans))
@@ -149,8 +160,21 @@ def main(task, systems, n, seed, caps_grid, model, out, dry_run):
         for caps in grid:
             name = f"tersetalk_f{caps['f']}_p{caps['p']}_q{caps['q']}"
             rows = run_tersetalk(ds, caps)
+            out_path = run_dir / f"{name}.jsonl"
             _save_jsonl(run_dir, name, rows)
             summary[name] = _summarize(rows)
+
+        # Create tersetalk_baseline.jsonl symlink to f30_p20_q30 for significance convenience
+        try:
+            base = run_dir / "tersetalk_f30_p20_q30.jsonl"
+            if base.exists():
+                link = run_dir / "tersetalk_baseline.jsonl"
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                link.symlink_to(base.name)
+        except Exception:
+            # On filesystems without symlink support, skip silently
+            pass
 
     # Hybrid budgets
     if 'hybrid' in systems:
