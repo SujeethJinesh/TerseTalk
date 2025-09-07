@@ -62,6 +62,65 @@ Note: The evaluation harness and accuracy metrics are planned in RESEARCH_PROPOS
 
 <We have incorporated all of the above into our research proposal>
 
+13) PR‑LL2 — LLMLingua integration (baseline + protocol + analysis)
+   - Motivation: Baseline `llmlingua` path currently falls back to free‑form because the package isn’t installed. We need a real compression comparison and hybrid non‑inferiority vs LL2.
+   - Current gap:
+     * Package not installed → `used_llmlingua=false`; compression fields null; past anomaly showed zeros when missing.
+     * Protocol touchpoints (pre‑overflow, deref) are off by default; not exercised in eval driver.
+     * Analysis/significance don’t include real LL2 points yet.
+   - Changes:
+     * Install/runtime: document optional `llmlingua==0.2.1` in README; keep import guard; support `TERSETALK_DISABLE_LL2=1` for CI fallback.
+     * Baseline: verify `run_llmlingua_once` returns `used_llmlingua=true`, origin/compressed tokens, and compression_ratio when installed; ensure fallback remains robust when missing.
+     * Protocol (optional): add flags in eval driver to enable pre‑overflow compression and deref compression via ProtocolHandler; record counters.
+     * Analysis: include LL2 in Pareto/points; run significance: Hybrid vs LL2 non‑inferiority (δ=0.02) on joint runs.
+     * Tests: small smoke that sets `TERSETALK_DISABLE_LL2=0` and, when llmlingua is installed, asserts `used_llmlingua=true` and non‑null compression fields; fallback test remains for missing pkg.
+   - Acceptance:
+     * `--systems llmlingua` produces real compressed prompts with metrics; significance JSON includes non‑inferiority H vs LL2 fields (not NaN).
+     * Protocol flags correctly toggle touchpoints; counters reported; no crash when disabled.
+
+14) PR‑EF1 — Critic short‑circuit + smaller token budgets + fallback temps
+   - Motivation: Cut latency and calls while preserving rows. Critic only needs a verdict; many items are “easy” after Worker fallback.
+   - Changes:
+     * pipeline_runner: If Worker fallback returns a short/clean answer (e.g., <= N chars, matches simple regex), skip Critic entirely (verdict='A').
+     * Reduce Critic max_tokens to 32; reduce Worker fallback max_tokens to 128; add temperature=0.1 to both fallbacks (tiny param pass‑through).
+     * Optional: add a `--critic-skip-simple` flag in run_evaluation to enable/disable short‑circuit.
+   - Acceptance:
+     * On n=10 runs, total runtime drops vs baseline without increasing error rows.
+     * No change in correctness on easy items; status remains OK; compliance 1.0.
+
+15) PR‑EF2 — Adaptive caps (HotpotQA baseline)
+   - Motivation: Our HotpotQA n=10 shows ~24% token savings at −0.2 EM; relaxing caps may reduce EM drop while keeping savings.
+   - Changes:
+     * run_evaluation: add `--caps` override flag (JSON: {f,p,q}).
+     * Quick comparison: f30/p20/q30 vs f50/p40/q50 on the same seed/model; update summary.
+   - Acceptance:
+     * n=10 paired HotpotQA runs show improved EM with acceptable token cost; figures updated (Pareto) and significance JSON included.
+
+16) PR‑EF3 — Hybrid routing (token‑aware)
+   - Motivation: Route harder items (long questions/many facts) to a more verbose path while keeping most items tersetalk.
+   - Changes:
+     * Enable Hybrid Gate in run_evaluation with a simple heuristic on question length/fact count and a budget (e.g., 400 tokens).
+     * Record routing notes and counts in summary.
+   - Acceptance:
+     * n=10 paired runs show improved EM with modest token increase; Pareto reflects better trade‑off.
+
+17) PR‑EF4 — GSM8K numeric discipline
+   - Motivation: n=10 GSM8K shows EM=0.0; formatting the final numeric answer precisely should help.
+   - Changes:
+     * Free‑form prompt: enforce “Final Answer: <number>” explicitly; optionally add 1 tiny few‑shot example.
+     * (Optional, tiny) If final line is purely numeric, prefer it when extracting; otherwise keep the current last‑number logic.
+   - Acceptance:
+     * n=10 GSM8K paired runs show EM > 0 for at least some items; token changes reasonable.
+
+18) PR‑OPS — Run efficiency & analysis hygiene
+   - Motivation: Speed up iterative runs and keep outputs clean for reviewers.
+   - Changes:
+     * Disable provenance enrichment during long evals (only run it once during analysis step); reduce extra JSON writes.
+     * Batch by system: run free‑form first to get early artifacts, then tersetalk.
+     * Add a simple run manifest per run_dir (list of generated files and sizes).
+   - Acceptance:
+     * Faster feedback loop; manifest present; no behavior change in metrics.
+
 12) PR‑14R — Per‑role model selection for agents (Worker/Critic) + timeouts
    - Motivation (evidence): Our quick real runs used Ollama `phi:latest` because `llama3.1:8b` stalled within harness timeouts. Accuracy was low on free‑form with small models. Enabling a stronger or different model for the Critic (and/or Worker) can improve end quality without changing the Manager path.
    - Ollama supports independent request contexts, so we can keep Ollama and still run logically independent agents. What we lack is per‑role model configuration.
