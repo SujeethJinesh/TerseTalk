@@ -231,7 +231,19 @@ def run_pipeline_once(
         max_tokens=128,
       )
     except Exception as e:  # pragma: no cover - exercised via tests with fakes
-      critic_error = f"{type(e).__name__}: {e}"
+      # Critic fallback: request a one-letter verdict; default to 'A' if undecidable
+      try:
+        txt = (client_critic or client).call_text(
+          system="You are a Critic. Read the JSONL and return only one letter: A (accept), R (revise), or E (error).",
+          user_prompt=critic_input,
+          max_tokens=16,
+        )
+        v = (txt or "").strip().upper()
+        v = "A" if not v else ("A" if v.startswith("A") else ("R" if v.startswith("R") else ("E" if v.startswith("E") else "A")))
+        critic_lines = [TerseTalkLine(tag="v", payload=[v])]
+        critic_error = None
+      except Exception as e2:
+        critic_error = f"{type(e).__name__}: {e}; FallbackError: {type(e2).__name__}: {e2}"
   t2 = time.perf_counter()
 
   # Aggregate outputs
