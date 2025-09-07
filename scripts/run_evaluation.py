@@ -70,8 +70,9 @@ def _save_jsonl(run_dir: Path, name: str, rows: List[Dict]) -> None:
 @click.option('--out', default='results/evaluation', show_default=True)
 @click.option('--worker-model', type=str, default=None, help='Override model for Worker role')
 @click.option('--critic-model', type=str, default=None, help='Override model for Critic role')
+@click.option('--temperature', type=float, default=0.2, show_default=True)
 @click.option('--dry-run', is_flag=True, help='Use n=10 and echo model')
-def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_model, dry_run):
+def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_model, temperature, dry_run):
     """Run v0.5 evaluation across systems; save JSONL and summary.json (offline-safe)."""
     set_global_seed(seed)
     if dry_run:
@@ -140,10 +141,10 @@ def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_mod
         rows: List[Dict] = []
         for ex in tqdm(examples, desc=tag):
             if tag == 'freeform':
-                r = run_freeform_once(ex, client)
+                r = run_freeform_once(ex, client, temperature=temperature)
                 tokens = int(r.get('tokens_total') or r.get('tokens') or 0)
             else:
-                r = run_llmlingua_once(ex, client)
+                r = run_llmlingua_once(ex, client, temperature=temperature)
                 tokens = int(r.get('tokens_total') or r.get('tokens') or 0)
             ans = str(r.get('answer', ''))
             r['correct'] = bool(evaluate_answer(ex, ans))

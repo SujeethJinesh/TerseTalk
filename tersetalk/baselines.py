@@ -4,6 +4,14 @@ import os
 from typing import Dict, Optional
 
 from tersetalk.model_io import ModelClient
+
+
+def _call_text_safe(client: ModelClient, system: str, prompt: str, max_tokens: int, temperature: float | None):
+  try:
+    return client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens, temperature=temperature)  # type: ignore[arg-type]
+  except TypeError:
+    # Fallback for clients without temperature param
+    return client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)  # type: ignore[call-arg]
 from tersetalk.hybrid_gate import estimate_tokens
 
 
@@ -58,7 +66,7 @@ Provide only the final answer as one or two short sentences.
 # ---- Baseline runners ----
 
 
-def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256) -> Dict:
+def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256, temperature: float | None = None) -> Dict:
   """
   Free-form (no compression) baseline.
   Uses ModelClient.call_text to obtain a plain-text response.
@@ -66,7 +74,7 @@ def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256)
   prompt = build_freeform_prompt(example)
   system = "You are a helpful, concise assistant."
   try:
-    response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
+    response = _call_text_safe(client, system, prompt, max_tokens, temperature)
     prompt_tokens = approx_token_count(prompt)
     response_tokens = approx_token_count(response)
     return {
@@ -107,7 +115,7 @@ def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256)
     }
 
 
-def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 400, max_tokens: int = 256) -> Dict:
+def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 400, max_tokens: int = 256, temperature: float | None = None) -> Dict:
   """
   Free-form + LLMLingua baseline.
   - If LLMLingua is unavailable or disabled (TERSETALK_DISABLE_LL2=1), falls back to
@@ -119,7 +127,7 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
 
   # Honor env switch to make CI deterministic
   if os.environ.get("TERSETALK_DISABLE_LL2", "0") == "1":
-    response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
+    response = _call_text_safe(client, system, prompt, max_tokens, temperature)
     pt = approx_token_count(prompt)
     rt = approx_token_count(response)
     return {
@@ -150,7 +158,7 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
     compressed_tokens = int(comp.get("compressed_tokens") or approx_token_count(compressed_prompt))
     ratio = float(comp.get("ratio") or (compressed_tokens / max(1, origin_tokens)))
 
-    response = client.call_text(system=system, user_prompt=compressed_prompt, max_tokens=max_tokens)
+    response = _call_text_safe(client, system, compressed_prompt, max_tokens, temperature)
     resp_tokens = approx_token_count(response)
     return {
       "answer": response.strip(),
@@ -171,7 +179,7 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
   except Exception:
     # Graceful fallback if library missing or runtime error
     try:
-      response = client.call_text(system=system, user_prompt=prompt, max_tokens=max_tokens)
+      response = _call_text_safe(client, system, prompt, max_tokens, temperature)
       pt = approx_token_count(prompt)
       rt = approx_token_count(response)
       return {

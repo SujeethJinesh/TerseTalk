@@ -98,18 +98,22 @@ class ModelClient:
     system: str,
     user_prompt: str,
     max_tokens: int = 512,
+    temperature: float | None = None,
   ) -> str:
     """
     Returns raw assistant text. Keep as a simple baseline utility.
     """
-    resp = self.client.chat.completions.create(
-      model=self.model,
-      messages=[
+    kwargs = {
+      "model": self.model,
+      "messages": [
         {"role": "system", "content": system},
         {"role": "user", "content": user_prompt},
       ],
-      max_tokens=max_tokens,
-    )
+      "max_tokens": max_tokens,
+    }
+    if temperature is not None:
+      kwargs["temperature"] = float(temperature)
+    resp = self.client.chat.completions.create(**kwargs)
     try:
       return (resp.choices[0].message.content or "").strip()
     except Exception:
@@ -143,5 +147,6 @@ class EchoModel(ModelClient):
     system: str,
     user_prompt: str,
     max_tokens: int = 512,
+    temperature: float | None = None,
   ) -> str:
     return "ECHO: hello from EchoModel"
