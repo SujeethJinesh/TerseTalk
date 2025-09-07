@@ -57,10 +57,22 @@ Question:
 {question}
 
 Instructions:
-Provide only the final answer as one or two short sentences.
+Return only the final answer. Do not include any words besides the answer.
 """
   # Remove empty lines except allow lone 'Question:' if needed
   return "\n".join(ln for ln in prompt.splitlines() if ln.strip() or ln == "Question:")
+
+
+def _strip_final_prefix(s: str) -> str:
+  if not isinstance(s, str):
+    return str(s)
+  t = s.strip()
+  low = t.lower()
+  for prefix in ("final answer:", "final answer is:", "final answer is"):
+    if low.startswith(prefix):
+      return t[len(prefix):].strip()
+  return t
+
 
 
 # ---- Baseline runners ----
@@ -75,10 +87,11 @@ def run_freeform_once(example: Dict, client: ModelClient, max_tokens: int = 256,
   system = "You are a helpful, concise assistant."
   try:
     response = _call_text_safe(client, system, prompt, max_tokens, temperature)
+    clean = _strip_final_prefix(response)
     prompt_tokens = approx_token_count(prompt)
-    response_tokens = approx_token_count(response)
+    response_tokens = approx_token_count(clean)
     return {
-      "answer": response.strip(),
+      "answer": clean,
       "prompt": prompt,
       "response": response,
       "prompt_tokens": int(prompt_tokens),
@@ -128,10 +141,11 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
   # Honor env switch to make CI deterministic
   if os.environ.get("TERSETALK_DISABLE_LL2", "0") == "1":
     response = _call_text_safe(client, system, prompt, max_tokens, temperature)
+    clean = _strip_final_prefix(response)
     pt = approx_token_count(prompt)
-    rt = approx_token_count(response)
+    rt = approx_token_count(clean)
     return {
-      "answer": response.strip(),
+      "answer": clean,
       "prompt": prompt,
       "response": response,
       "prompt_tokens": int(pt),
@@ -159,9 +173,10 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
     ratio = float(comp.get("ratio") or (compressed_tokens / max(1, origin_tokens)))
 
     response = _call_text_safe(client, system, compressed_prompt, max_tokens, temperature)
+    clean = _strip_final_prefix(response)
     resp_tokens = approx_token_count(response)
     return {
-      "answer": response.strip(),
+      "answer": clean,
       "prompt": compressed_prompt,
       "response": response,
       "prompt_tokens": int(compressed_tokens),
@@ -180,10 +195,11 @@ def run_llmlingua_once(example: Dict, client: ModelClient, target_token: int = 4
     # Graceful fallback if library missing or runtime error
     try:
       response = _call_text_safe(client, system, prompt, max_tokens, temperature)
+      clean = _strip_final_prefix(response)
       pt = approx_token_count(prompt)
-      rt = approx_token_count(response)
+      rt = approx_token_count(clean)
       return {
-        "answer": response.strip(),
+        "answer": clean,
         "prompt": prompt,
         "response": response,
         "prompt_tokens": int(pt),

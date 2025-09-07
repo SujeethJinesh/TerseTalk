@@ -205,7 +205,7 @@ def run_pipeline_once(
     # Fallback: request a concise final answer via text, then wrap as a simple TerseTalk line
     try:
       text = (client_worker or client).call_text(
-        system="You are a Worker. Read the JSONL and provide a concise final answer only.",
+        system="You are a Worker. Read the JSONL and return only the final answer with no extra words.",
         user_prompt=validated_jsonl,
         max_tokens=128,
       )
@@ -234,7 +234,7 @@ def run_pipeline_once(
       # Critic fallback: request a one-letter verdict; default to 'A' if undecidable
       try:
         txt = (client_critic or client).call_text(
-          system="You are a Critic. Read the JSONL and return only one letter: A (accept), R (revise), or E (error).",
+          system="You are a Critic. Read the JSONL and return only one letter: A (accept), R (revise), or E (error). No extra words.",
           user_prompt=critic_input,
           max_tokens=16,
         )

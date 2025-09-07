@@ -2,7 +2,39 @@ Read through your @AGENTS.md and ensure you follow that precisely. Make sure you
 
 ### PR Summary
 
-PR‑20 — Instruct Model Runs (n=2) + Strict Generation Settings
+PR‑21 — Critic Fallback + Instruct Runs (n=2) & Analysis
+
+Scope (≤250 LOC where needed):
+- Add Critic fallback (text verdict A/R/E) when structured Critic fails (done)
+- Run paired, real‑data instruct evaluations (n=2) with low temperature and strict formatting
+- Generate figures (Pareto) and significance JSON; attach paths and short analysis
+
+Settings & Models
+- Temperature: 0.2; max_tokens: 256–384 where applicable
+- Systems: tersetalk (Worker+Critic fallback), freeform (final answer only), hybrid/llmlingua if time permits (guarded)
+- Tasks: hotpotqa and gsm8k; Seeds: [0]
+- Per‑role models: codellama:13b-instruct (Ollama); if llama3.1:8b-instruct-q8_0 is available locally, prefer it
+
+Commands (example)
+- export OLLAMA_MODEL="codellama:13b-instruct"
+- python scripts/run_evaluation.py --task hotpotqa \
+  --systems tersetalk --systems freeform --n 2 --seed 0 \
+  --model "$OLLAMA_MODEL" --worker-model "$OLLAMA_MODEL" --critic-model "$OLLAMA_MODEL" \
+  --temperature 0.2 --out results/eval_instruct_joint_htpq --no-caps-grid
+- Repeat for gsm8k to results/eval_instruct_joint_gsm8k
+
+Analysis
+- python scripts/analyze_v05.py --indir results/eval_instruct_joint_htpq --outdir results/eval_instruct_joint_htpq/figures
+- Artifacts: pareto_points.csv, pareto_frontier.pdf (ablation optional if caps grid on)
+
+Significance (paired)
+- python scripts/run_significance.py --results-dir results/eval_instruct_joint_htpq/hotpotqa/<timestamp> --boots 2000
+- Uses tersetalk_baseline.jsonl symlink and freeform.jsonl in same dir
+
+Acceptance
+- Both tasks produce non‑NaN paired stats and non‑error rows for tersetalk
+- Pareto artifacts saved; console summaries present; short analysis attached
+
 
 Scope (≤250 LOC where needed):
 - Use Ollama instruct model `llama3.1:8b-instruct-q8_0` where available
