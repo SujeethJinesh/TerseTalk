@@ -429,3 +429,19 @@ You are writing code to test the minimal viable research proposal.
   - Summary: Adds `tersetalk/statistics.py` (numpy-only bootstrap: paired CI, percent reduction, mean CI, one-sided p, noninferiority) and `scripts/run_significance.py` CLI. Produces concise console lines and `significance_tests.json` from PR‑14 JSONL outputs.
   - Evidence: pytest green; `tests/test_statistics_smoke.py` creates minimal aligned rows and verifies JSON output; Claude review Approved: no nits.
   - Next: Run on Ollama evaluation outputs (phi, llama3.1:8b) to quantify token reductions and quality deltas; attach reports to PRs.
+
+
+- PR-19 — Worker Fallback (Ollama-safe):
+  - Summary: Adds Worker text fallback when Instructor fails; wraps final answer as TerseTalk ["f", ...]; status OK on success.
+  - Evidence: tests green; reduced error rows in pipeline on Ollama.
+  - Next: Add Critic fallback to avoid dropping rows when Critic schema fails.
+
+- PR-20 — Temperature + Instruct-run Plan (n=2):
+  - Summary: Adds temperature controls to ModelClient/baselines; updates PROMPT with instruct-run plan (n=2).
+  - Evidence: pytest green; codellama:13b-instruct freeform runs (n=2) completed; figures generated.
+  - Next: Execute joint runs with tersetalk+freeform; produce significance JSON.
+
+- PR-21 — Critic Fallback (text):
+  - Summary: Adds Critic text fallback (A/R/E) when structured validation fails; complements Worker fallback to preserve rows.
+  - Evidence: tests green; ready to re-run instruct evaluations and analysis.
+  - Next: Run paired instruct evaluations (n=2), analyze (Pareto), run significance, attach artifacts.
