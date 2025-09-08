@@ -1,0 +1,4 @@
+system,tokens,accuracy,is_pareto
+tersetalk_f30_p20_q30,160.0,0.0,0
+tersetalk_baseline,160.0,0.0,0
+freeform,156.0,0.0,1

@@ -1,0 +1,10 @@
+{
+  "task": "gsm8k",
+  "systems": [
+    "freeform"
+  ],
+  "n": 3,
+  "seed": 0,
+  "caps_grid": true,
+  "model": "phi:latest"
+}

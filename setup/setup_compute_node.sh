@@ -31,25 +31,6 @@ check_compute_node() {
   echo ""
 }
 
-activate_environment() {
-  echo "Activating Python environment..."
-  
-  # Load modules if available
-  if [ -f load_modules.sh ]; then
-    source load_modules.sh
-  fi
-  
-  # Activate venv
-  if [ -f "${VENV_DIR}/bin/activate" ]; then
-    source "${VENV_DIR}/bin/activate"
-    echo "Python: $(which python)"
-    echo "Version: $(python --version)"
-  else
-    echo "WARNING: No virtual environment found. Run setup_login_node.sh first."
-  fi
-  echo ""
-}
-
 install_ollama() {
   echo "Installing Ollama..."
   
@@ -67,29 +48,18 @@ install_ollama() {
     fi
   fi
   
-  echo "Downloading Ollama..."
+  echo "Downloading Ollama binary directly..."
+  OLLAMA_URL="https://github.com/ollama/ollama/releases/download/v0.11.10/ollama-linux-amd64.tgz"
   
-  # Try to get latest release
-  OLLAMA_URL=$(curl -s https://api.github.com/repos/ollama/ollama/releases/latest 2>/dev/null | \
-               grep "browser_download_url.*linux-amd64\"" | \
-               head -1 | \
-               cut -d '"' -f 4)
-  
-  if [ -z "$OLLAMA_URL" ]; then
-    echo "Could not fetch latest release, using fallback version"
-    OLLAMA_URL="https://github.com/ollama/ollama/releases/download/v0.3.12/ollama-linux-amd64"
-  else
-    echo "Found latest release: ${OLLAMA_URL}"
-  fi
-  
-  curl -L --progress-bar "$OLLAMA_URL" -o "${OLLAMA_DIR}/ollama"
+  echo "Downloading from: ${OLLAMA_URL}"
+  curl -L --progress-bar "${OLLAMA_URL}" -o "${OLLAMA_DIR}/ollama"
   chmod +x "${OLLAMA_DIR}/ollama"
   
   # Add to PATH
   export PATH="${OLLAMA_DIR}:$PATH"
   
   echo "Ollama installed successfully"
-  echo "Version: $("${OLLAMA_DIR}/ollama" --version)"
+  echo "Version: $("${OLLAMA_DIR}/ollama" --version 2>/dev/null || echo 'check failed')"
   echo ""
 }
 
@@ -99,6 +69,7 @@ start_ollama() {
   # Set environment
   export OLLAMA_MODELS="${HOME}/.ollama/models"
   export OLLAMA_HOST="${OLLAMA_HOST}"
+  export OLLAMA_BASE_URL="http://${OLLAMA_HOST}/v1"
   export PATH="${OLLAMA_DIR}:$PATH"
   
   # Check if already running
@@ -247,7 +218,6 @@ cleanup_info() {
 
 main() {
   check_compute_node
-  activate_environment
   install_ollama
   check_disk_space
   start_ollama

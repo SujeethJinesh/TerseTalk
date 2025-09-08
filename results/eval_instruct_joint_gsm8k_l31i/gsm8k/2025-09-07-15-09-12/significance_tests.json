@@ -1,0 +1,22 @@
+{
+  "token_reduction": {
+    "mean_reduction_pct": -0.030708233062509183,
+    "ci_lower": -0.34933313891985285,
+    "ci_upper": 0.24100432722056842,
+    "p_one_sided_gt0": 0.5488,
+    "n": 10
+  },
+  "quality_preservation": {
+    "mean_diff": 0.0,
+    "ci_lower": 0.0,
+    "ci_upper": 0.0,
+    "n": 10
+  },
+  "hybrid_noninferiority": {
+    "mean_difference": NaN,
+    "ci_lower": NaN,
+    "ci_upper": NaN,
+    "delta": 0.02,
+    "is_noninferior": false
+  }
+}

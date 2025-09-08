@@ -1,0 +1,10 @@
+{
+  "task": "hotpotqa",
+  "system": "tersetalk",
+  "seed": 42,
+  "caps": {
+    "f": 30,
+    "p": 20,
+    "q": 30
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "llmlingua": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  }
+}

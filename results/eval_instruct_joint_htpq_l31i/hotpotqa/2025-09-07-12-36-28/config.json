@@ -1,0 +1,11 @@
+{
+  "task": "hotpotqa",
+  "systems": [
+    "tersetalk",
+    "freeform"
+  ],
+  "n": 2,
+  "seed": 0,
+  "caps_grid": false,
+  "model": "llama3.1:8b-instruct-q8_0"
+}

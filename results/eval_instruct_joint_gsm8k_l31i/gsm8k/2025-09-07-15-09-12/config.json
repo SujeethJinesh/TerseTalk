@@ -1,0 +1,11 @@
+{
+  "task": "gsm8k",
+  "systems": [
+    "tersetalk",
+    "freeform"
+  ],
+  "n": 10,
+  "seed": 0,
+  "caps_grid": false,
+  "model": "llama3.1:8b-instruct-q8_0"
+}

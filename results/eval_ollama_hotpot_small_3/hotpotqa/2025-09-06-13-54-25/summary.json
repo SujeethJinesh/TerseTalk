@@ -1,0 +1,9 @@
+{
+  "freeform": {
+    "n_total": 3,
+    "n_successful": 3,
+    "avg_tokens": 455.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  }
+}

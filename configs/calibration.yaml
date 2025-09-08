@@ -1,0 +1,1686 @@
+{
+  "best": {
+    "metrics": {
+      "avg_density": 0.9726190476190477,
+      "avg_est_tokens": 84.83333333333333,
+      "avg_overflow_rate": 0.02738095238095238,
+      "n": 30,
+      "routed_freeform_frac": 0.23333333333333334
+    },
+    "spec": {
+      "caps": {
+        "f": 30,
+        "g": 30,
+        "p": 20,
+        "q": 30,
+        "t": 50,
+        "u": 20
+      },
+      "deref_policy": "never",
+      "gate_enabled": true,
+      "summarizer": "extractive",
+      "token_budget": 120
+    }
+  },
+  "density_min": 0.7,
+  "grid_evaluations": [
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 84.9,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.4
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 93.33333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.2
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 84.9,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.4
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 93.33333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.2
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 84.9,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.4
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 93.33333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.2
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9033730158730159,
+        "avg_est_tokens": 107.53333333333333,
+        "avg_overflow_rate": 0.09662698412698413,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 20,
+          "g": 30,
+          "p": 15,
+          "q": 20,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 84.83333333333333,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.23333333333333334
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 94.7,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.03333333333333333
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 84.83333333333333,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.23333333333333334
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 94.7,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.03333333333333333
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 84.83333333333333,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.23333333333333334
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 94.7,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.03333333333333333
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 0.9726190476190477,
+        "avg_est_tokens": 96.93333333333334,
+        "avg_overflow_rate": 0.02738095238095238,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 30,
+          "g": 30,
+          "p": 20,
+          "q": 30,
+          "t": 50,
+          "u": 20
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 50,
+          "g": 40,
+          "p": 40,
+          "q": 50,
+          "t": 60,
+          "u": 25
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "never",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "conditional",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": false,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 87.63333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.06666666666666667
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 120
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 150
+      }
+    },
+    {
+      "metrics": {
+        "avg_density": 1.0,
+        "avg_est_tokens": 89.93333333333334,
+        "avg_overflow_rate": 0.0,
+        "n": 30,
+        "routed_freeform_frac": 0.0
+      },
+      "spec": {
+        "caps": {
+          "f": 100,
+          "g": 60,
+          "p": 80,
+          "q": 100,
+          "t": 80,
+          "u": 30
+        },
+        "deref_policy": "always",
+        "gate_enabled": true,
+        "summarizer": "extractive",
+        "token_budget": 300
+      }
+    }
+  ],
+  "n": 30,
+  "seed": 7
+}

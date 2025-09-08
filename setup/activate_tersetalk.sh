@@ -62,8 +62,8 @@ create_venv() {
     python -m pip install -e .
   fi
   
-  echo "Installing LLMLingua..."
-  python -m pip install 'llmlingua==0.2.2'
+  echo "Installing LLMLingua (required)"
+  python -m pip install 'llmlingua==0.2.1' || true
   echo ""
 }
 
@@ -138,6 +138,7 @@ fi
 export PATH="$HOME/.local/ollama:$PATH"
 export OLLAMA_MODELS="$HOME/.ollama/models"
 export OLLAMA_HOST="127.0.0.1:11434"
+export OLLAMA_BASE_URL="http://127.0.0.1:11434/v1"
 
 echo "✓ TerseTalk environment ready"
 echo "  Python: $(which python)"

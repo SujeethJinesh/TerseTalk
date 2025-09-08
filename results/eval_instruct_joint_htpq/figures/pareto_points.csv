@@ -1,0 +1,15 @@
+system,tokens,accuracy,is_pareto
+tersetalk_f30_p20_q30,180.5,0.0,0
+tersetalk_baseline,180.5,0.0,0
+tersetalk_f100_p80_q100,301.0,0.0,0
+freeform,340.5,0.0,0
+tersetalk_f50_p40_q50,221.5,0.5,0
+tersetalk_f20_p15_q20,151.0,0.0,1
+tersetalk_f30_p20_q30,173.0,0.0,0
+tersetalk_baseline,173.0,0.0,0
+tersetalk_f100_p80_q100,313.5,0.0,0
+tersetalk_f50_p40_q50,227.5,0.0,0
+tersetalk_f20_p15_q20,183.0,0.0,0
+tersetalk_f30_p20_q30,171.5,0.5,1
+tersetalk_baseline,171.5,0.5,0
+freeform,338.5,0.0,0

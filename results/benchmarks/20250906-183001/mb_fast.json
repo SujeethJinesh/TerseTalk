@@ -1,0 +1,25 @@
+{
+  "MB1_tag_extraction": {
+    "n": 20000,
+    "jsonl_seconds": 0.005764083005487919,
+    "freeform_compiled_seconds": 0.017726332996971905,
+    "freeform_uncompiled_seconds": 0.10359900002367795,
+    "speedup_vs_compiled": 3.0753084194129165,
+    "speedup_vs_uncompiled": 17.97319711132586
+  },
+  "MB2_streaming_boundaries": {
+    "n_msgs": 20000,
+    "jsonl_seconds": 0.006050082971341908,
+    "freeform_seconds": 0.3019905840046704,
+    "speedup": 49.91511445961028
+  },
+  "MB3_serde_bytes": {
+    "n_msgs": 2000,
+    "jsonl_seconds": 0.02574595797341317,
+    "freeform_seconds": 0.07230120792519301,
+    "jsonl_bytes": 437224,
+    "freeform_bytes": 740805,
+    "bytes_ratio_jsonl_over_freeform": 0.590201200045896
+  },
+  "notes": "Times are wall-clock seconds (time.perf_counter). JSON is valid YAML."
+}

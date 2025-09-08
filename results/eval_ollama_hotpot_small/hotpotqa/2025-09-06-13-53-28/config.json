@@ -1,0 +1,10 @@
+{
+  "task": "hotpotqa",
+  "systems": [
+    "freeform"
+  ],
+  "n": 1,
+  "seed": 0,
+  "caps_grid": true,
+  "model": "phi:latest"
+}

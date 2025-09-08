@@ -1,0 +1,10 @@
+{
+  "task": "hotpotqa",
+  "systems": [
+    "freeform"
+  ],
+  "n": 2,
+  "seed": 0,
+  "caps_grid": true,
+  "model": "codellama:13b-instruct"
+}

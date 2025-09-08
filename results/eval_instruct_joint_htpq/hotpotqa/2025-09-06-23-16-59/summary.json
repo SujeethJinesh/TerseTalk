@@ -1,0 +1,30 @@
+{
+  "tersetalk_f20_p15_q20": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 183.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  },
+  "tersetalk_f30_p20_q30": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 173.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  },
+  "tersetalk_f50_p40_q50": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 227.5,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  },
+  "tersetalk_f100_p80_q100": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 313.5,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  }
+}

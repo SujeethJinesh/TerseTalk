@@ -1,0 +1,2 @@
+run_path,run_id,task,system,model,seed,n,caps,summarizer,deref_policy,hybrid,token_budget,accuracy,tokens_avg,tokens_median,bytes_on_wire_avg,sp_avg,overflow_avg
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_freeform_gsm8k/gsm8k/2025-09-06-20-54-02,2025-09-06-20-54-02,gsm8k,unknown,codellama:13b-instruct,0,2,,,,0,,0.0,0.0,0.0,0.0,,

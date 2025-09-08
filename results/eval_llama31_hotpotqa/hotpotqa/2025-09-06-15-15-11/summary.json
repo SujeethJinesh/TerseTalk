@@ -1,0 +1,65 @@
+{
+  "tersetalk_f20_p15_q20": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "tersetalk_f30_p20_q30": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "tersetalk_f50_p40_q50": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "tersetalk_f100_p80_q100": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "hybrid_budget_400": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "hybrid_budget_600": {
+    "n_total": 2,
+    "n_successful": 1,
+    "avg_tokens": 438.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.5
+  },
+  "hybrid_budget_800": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  },
+  "freeform": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 341.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0
+  },
+  "llmlingua": {
+    "n_total": 2,
+    "n_successful": 0,
+    "avg_tokens": 0.0,
+    "accuracy": 0.0,
+    "compliance_rate": 0.0
+  }
+}

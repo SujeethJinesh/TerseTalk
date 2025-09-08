@@ -1,0 +1,3 @@
+name,avg_cap,tokens,accuracy,overflow_rate
+tersetalk_f30_p20_q30,26.666666666666668,171.5,0.5,1.5
+tersetalk_baseline,30.0,171.5,0.5,1.5

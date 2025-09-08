@@ -1,0 +1,24 @@
+{
+  "tersetalk_f30_p20_q30": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 160.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0,
+    "tokens_method": "heuristic",
+    "sp_method": "jaccard",
+    "timestamp": "2025-09-07T11:51:05.084947",
+    "version": "a53d0ae"
+  },
+  "freeform": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 156.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0,
+    "tokens_method": "heuristic",
+    "sp_method": "jaccard",
+    "timestamp": "2025-09-07T11:51:05.118513",
+    "version": "a53d0ae"
+  }
+}

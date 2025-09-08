@@ -1,0 +1,3 @@
+run_path,run_id,task,system,model,seed,n,caps,summarizer,deref_policy,hybrid,token_budget,accuracy,tokens_avg,tokens_median,bytes_on_wire_avg,sp_avg,overflow_avg
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_joint_gsm8k_l31i/gsm8k/2025-09-07-12-45-07,2025-09-07-12-45-07,gsm8k,unknown,llama3.1:8b-instruct-q8_0,0,2,,,,0,,0.0,0.0,0.0,0.0,,
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_joint_gsm8k_l31i/gsm8k/2025-09-07-15-09-12,2025-09-07-15-09-12,gsm8k,unknown,llama3.1:8b-instruct-q8_0,0,10,,,,0,,0.0,0.0,0.0,0.0,,

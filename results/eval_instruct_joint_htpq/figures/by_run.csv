@@ -1,0 +1,4 @@
+run_path,run_id,task,system,model,seed,n,caps,summarizer,deref_policy,hybrid,token_budget,accuracy,tokens_avg,tokens_median,bytes_on_wire_avg,sp_avg,overflow_avg
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_joint_htpq/hotpotqa/2025-09-06-23-16-59,2025-09-06-23-16-59,hotpotqa,unknown,codellama:13b-instruct,0,2,,,,0,,0.0,0.0,0.0,0.0,,
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_joint_htpq/hotpotqa/2025-09-06-22-55-52,2025-09-06-22-55-52,hotpotqa,unknown,codellama:13b-instruct,0,2,,,,0,,0.0,0.0,0.0,0.0,,
+/Users/sujeethjinesh/Desktop/TerseTalk/results/eval_instruct_joint_htpq/hotpotqa/2025-09-07-11-35-33,2025-09-07-11-35-33,hotpotqa,unknown,codellama:13b-instruct,0,2,,,,0,,0.0,0.0,0.0,0.0,,

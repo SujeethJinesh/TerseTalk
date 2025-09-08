@@ -1,0 +1,13 @@
+{
+  "freeform": {
+    "n_total": 2,
+    "n_successful": 2,
+    "avg_tokens": 180.0,
+    "accuracy": 0.0,
+    "compliance_rate": 1.0,
+    "tokens_method": "heuristic",
+    "sp_method": "jaccard",
+    "timestamp": "2025-09-06T21:08:55.277927",
+    "version": "0779bee"
+  }
+}
