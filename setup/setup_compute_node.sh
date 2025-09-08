@@ -88,7 +88,7 @@ start_ollama() {
   echo "Waiting for Ollama to be ready..."
   
   # Wait for service to be ready
-  MAX_ATTEMPTS=30
+  MAX_ATTEMPTS=100
   for i in $(seq 1 $MAX_ATTEMPTS); do
     if curl -sS "${OLLAMA_HOST}/api/tags" >/dev/null 2>&1; then
       echo "Ollama is ready!"
