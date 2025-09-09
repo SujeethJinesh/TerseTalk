@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+import os
 from typing import Dict, List, Optional
 
 from tersetalk.model_io import ModelClient, EchoModel, dump_jsonl
@@ -115,14 +116,24 @@ def extract_answer(worker_lines: List[TerseTalkLine]) -> str:
   """
   Heuristics: prefer the last 'f' payload, else last 't', else last 'g', else empty.
   """
+  def _strip_prefixes(s: str) -> str:
+    t = (s or "").strip()
+    low = t.lower()
+    for p in ("final answer:", "final answer is:", "final answer is", "answer:"):
+      if low.startswith(p):
+        return t[len(p):].strip()
+    return t
+
   ans = ""
   for ln in reversed(worker_lines):
     if ln.tag == "f" and ln.payload:
-      return str(ln.payload[0])
+      return _strip_prefixes(str(ln.payload[0]))
     if ln.tag == "t" and ln.payload:
-      ans = ans or str(ln.payload[0])
+      cand = _strip_prefixes(str(ln.payload[0]))
+      ans = ans or cand
     if ln.tag == "g" and ln.payload:
-      ans = ans or str(ln.payload[0])
+      cand = _strip_prefixes(str(ln.payload[0]))
+      ans = ans or cand
   return ans
 
 
@@ -196,17 +207,32 @@ def run_pipeline_once(
   worker_error: Optional[str] = None
   try:
     c_w = client_worker or client
+    # Include the user question explicitly in system guidance to improve answer discipline
+    q_text = str(example.get("question", "")).strip()
+    worker_sys = (
+      "You are a Worker. Read the Manager's TerseTalk-JSONL (facts, assumptions, and a question). "
+      "Use ONLY the provided information—do not invent facts or entities. Do NOT generate IDs like M# or S#. "
+      "Respond ONLY with valid TerseTalk lines (allowed tags: r,g,f,u,p,q,d,v,o,t,x). You may include up to TWO short ['t','...'] lines for scratch reasoning. "
+      "For entity questions (Hotpot-style), return the exact entity string. For math questions (GSM8K-style), return ONLY the final integer (no commas, units, or words). "
+      "IMPORTANT: End with exactly one final line ['f','<final answer>'] containing ONLY the final answer (no extra words).\n"
+      f"Question: {q_text}\n"
+      "Format example (pattern only):\n[\"r\",\"W\"]\n[\"t\",\"short note\"]\n[\"f\",\"<final answer>\"]"
+    )
+    # SP-prose preface to aid comprehension while keeping output typed
+    worker_input = (
+      "(Human summary; do not output this prose)\n" + sp_reference + "\n\nJSONL follows:\n" + validated_jsonl
+    )
     worker_lines = c_w.call_jsonl_strict(
-      system="You are a Worker. Read TerseTalk-JSONL and respond with valid TerseTalk lines.",
-      user_prompt=validated_jsonl,
-      max_tokens=256,
+      system=worker_sys,
+      user_prompt=worker_input,
+      max_tokens=384,
     )
   except Exception as e:  # pragma: no cover - exercised via tests with fakes
     # Fallback: request a concise final answer via text, then wrap as a simple TerseTalk line
     try:
       text = (client_worker or client).call_text(
-        system="You are a Worker. Read the JSONL and return only the final answer with no extra words.",
-        user_prompt=validated_jsonl,
+        system="You are a Worker. Read the JSONL and return ONLY the final answer with no extra words.",
+        user_prompt=worker_input,
         max_tokens=128,
       )
       if text:
@@ -250,15 +276,44 @@ def run_pipeline_once(
   worker_jsonl = _jsonl_from_lines(worker_lines) if worker_lines else ""
   critic_jsonl = _jsonl_from_lines(critic_lines) if critic_lines else ""
 
-  tokens_total = (
-    _approx_tokens(validated_jsonl) + _approx_tokens(worker_jsonl) + _approx_tokens(critic_jsonl)
-  )
+  # Token accounting based on actual inputs used
+  try:
+    tokens_worker_in = _approx_tokens(worker_input)  # type: ignore[name-defined]
+  except Exception:
+    tokens_worker_in = _approx_tokens(validated_jsonl)
+  tokens_critic_in = _approx_tokens(critic_jsonl and critic_input or "")  # type: ignore[name-defined]
+  tokens_total = tokens_worker_in + _approx_tokens(worker_jsonl) + tokens_critic_in
   total_lines = _nonempty_jsonl_lines(validated_jsonl)
   density = 1.0 - (float(overflow_cnt) / max(1, total_lines))
 
   # Extract answer & verdict
   answer = extract_answer(worker_lines) if worker_lines else ""
   verdict = extract_verdict(critic_lines) if critic_lines else "A"
+
+  # Optional post-hoc fallback to freeform for quality preservation
+  fallback_used = False
+  fallback_tokens = 0
+  if os.environ.get("TERSETALK_POSTHOC_FALLBACK", "").lower() in {"1","true","yes"}:
+    need_fallback = (not answer) or (verdict != "A")
+    if need_fallback:
+      try:
+        from tersetalk.baselines import build_freeform_prompt
+      except Exception:
+        build_freeform_prompt = None  # type: ignore
+      try:
+        ff_prompt = build_freeform_prompt(example) if build_freeform_prompt else ("Question:\n" + str(example.get("question","")))
+        ff_resp = (client_worker or client).call_text(
+          system="You are a helpful assistant. Return ONLY the final answer.",
+          user_prompt=ff_prompt,
+          max_tokens=256,
+          temperature=0.2,
+        )
+        if isinstance(ff_resp, str) and ff_resp.strip():
+          answer = ff_resp.strip()
+          fallback_used = True
+          fallback_tokens = _approx_tokens(ff_prompt) + _approx_tokens(ff_resp)
+      except Exception:
+        pass
 
   # Grab memory stats and reset between tasks (non-leakage)
   mem_stats_before_reset = memory.stats()
@@ -268,7 +323,7 @@ def run_pipeline_once(
   result = {
     "answer": answer,
     "verdict": verdict,
-    "tokens_total": int(tokens_total),
+    "tokens_total": int(tokens_total + fallback_tokens),
     "overflow_count": int(overflow_cnt),
     "density": float(density),
     "latency_ms": {
@@ -283,6 +338,9 @@ def run_pipeline_once(
     "memory_stats": mem_stats_before_reset,
     "status": status,
   }
+  if fallback_used:
+    result["fallback_used"] = True
+    result["fallback_tokens"] = int(fallback_tokens)
   if worker_error is not None:
     result["worker_error"] = worker_error
   if critic_error is not None:

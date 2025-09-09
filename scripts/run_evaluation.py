@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import os
 import sys
 from typing import Dict, List
 
@@ -71,16 +72,24 @@ def _save_jsonl(run_dir: Path, name: str, rows: List[Dict]) -> None:
 @click.option('--worker-model', type=str, default=None, help='Override model for Worker role')
 @click.option('--critic-model', type=str, default=None, help='Override model for Critic role')
 @click.option('--temperature', type=float, default=0.2, show_default=True)
+@click.option('--prefer-json', is_flag=True, help='Prefer JSON response_format for Ollama (single JSON array-of-arrays)')
+@click.option('--posthoc-fallback', is_flag=True, help='Enable post-hoc fallback to freeform when Critic rejects or no final f-line')
 @click.option('--dry-run', is_flag=True, help='Use n=10 and echo model')
-def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_model, temperature, dry_run):
+def main(task, systems, n, seed, caps_grid, model, out, worker_model, critic_model, temperature, prefer_json, posthoc_fallback, dry_run):
     """Run v0.5 evaluation across systems; save JSONL and summary.json (offline-safe)."""
     set_global_seed(seed)
     if dry_run:
         n, model = 10, 'echo'
 
+    # Toggle runtime behavior via env for underlying modules
+    if prefer_json:
+        os.environ['TERSETALK_PREFER_JSON'] = '1'
+    if posthoc_fallback:
+        os.environ['TERSETALK_POSTHOC_FALLBACK'] = '1'
+
     rm = ResultsManager(out)
     run_dir = rm.get_run_dir(task, timestamp=True)
-    rm.save_config(run_dir, {"task": task, "systems": systems, "n": n, "seed": seed, "caps_grid": bool(caps_grid), "model": model})
+    rm.save_config(run_dir, {"task": task, "systems": systems, "n": n, "seed": seed, "caps_grid": bool(caps_grid), "model": model, "prefer_json": bool(prefer_json), "posthoc_fallback": bool(posthoc_fallback)})
 
     # Data
     ds = load_hotpotqa(n=n, seed=seed) if task == 'hotpotqa' else load_gsm8k(n=n, seed=seed)
